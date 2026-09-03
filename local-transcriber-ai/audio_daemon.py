@@ -47,52 +47,97 @@ recording_thread = None
 
 def get_audio_processes():
     results = []
-    if not PYCAW_AVAILABLE:
-        return results
+    seen = set()
 
-    try:
-        sessions = AudioUtilities.GetAllSessions()
-        seen = set()
-        for s in sessions:
-            if not s.Process or s.Process.pid in seen:
-                continue
-            seen.add(s.Process.pid)
-            pid = s.Process.pid
-            name = s.Process.name()
-            
-            # Determine recognized app tag for icons
-            low_name = name.lower()
-            app_type = "generic"
-            if "chrome" in low_name:
-                app_type = "chrome"
-            elif "teams" in low_name:
-                app_type = "teams"
-            elif "discord" in low_name:
-                app_type = "discord"
-            elif "zoom" in low_name:
-                app_type = "zoom"
-            elif "spotify" in low_name:
-                app_type = "spotify"
-            elif "edge" in low_name or "msedge" in low_name:
-                app_type = "edge"
-            elif "firefox" in low_name:
-                app_type = "firefox"
-            elif "code" in low_name or "antigravity" in low_name:
-                app_type = "ide"
+    # 1. Primary: Audio Sessions from Windows Core Audio (PyCaw)
+    if PYCAW_AVAILABLE:
+        try:
+            sessions = AudioUtilities.GetAllSessions()
+            for s in sessions:
+                if not s.Process or s.Process.pid in seen:
+                    continue
+                pid = s.Process.pid
+                raw_name = s.Process.name()
+                low_name = raw_name.lower()
+                
+                # Determine friendly display name and appType
+                if "chrome" in low_name:
+                    app_name = "Google Chrome (YouTube / Audio)"
+                    app_type = "chrome"
+                elif "teams" in low_name:
+                    app_name = "Microsoft Teams"
+                    app_type = "teams"
+                elif "discord" in low_name:
+                    app_name = "Discord"
+                    app_type = "discord"
+                elif "zoom" in low_name:
+                    app_name = "Zoom Meeting"
+                    app_type = "zoom"
+                elif "spotify" in low_name:
+                    app_name = "Spotify"
+                    app_type = "spotify"
+                elif "edge" in low_name or "msedge" in low_name:
+                    app_name = "Microsoft Edge"
+                    app_type = "edge"
+                elif "firefox" in low_name:
+                    app_name = "Mozilla Firefox"
+                    app_type = "firefox"
+                else:
+                    app_name = raw_name
+                    app_type = "generic"
 
-            try:
-                title = psutil.Process(pid).name()
-            except Exception:
-                title = name
+                is_active = False
+                try:
+                    is_active = (s.State == 1)
+                except Exception:
+                    pass
 
-            results.append({
-                "pid": pid,
-                "name": name,
-                "title": title,
-                "appType": app_type
-            })
-    except Exception as e:
-        print(f"Process enumeration error: {e}")
+                seen.add(pid)
+                results.append({
+                    "pid": pid,
+                    "name": app_name,
+                    "title": app_name,
+                    "appType": app_type,
+                    "isActive": is_active
+                })
+        except Exception as e:
+            print(f"PyCaw session scan warning: {e}")
+
+    # 2. Fallback: Detect running browsers & communication tools via psutil
+    recognized_targets = [
+        ("chrome.exe", "Google Chrome", "chrome"),
+        ("msedge.exe", "Microsoft Edge", "edge"),
+        ("firefox.exe", "Mozilla Firefox", "firefox"),
+        ("brave.exe", "Brave Browser", "chrome"),
+        ("teams.exe", "Microsoft Teams", "teams"),
+        ("zoom.exe", "Zoom", "zoom"),
+        ("spotify.exe", "Spotify", "spotify"),
+        ("discord.exe", "Discord", "discord")
+    ]
+
+    added_names = {r["name"].lower() for r in results}
+
+    for p in psutil.process_iter(['pid', 'name']):
+        try:
+            proc_name = (p.info.get('name') or '').lower()
+            for exe_name, friendly_name, app_type in recognized_targets:
+                if exe_name in proc_name and friendly_name.lower() not in added_names:
+                    pid = p.info['pid']
+                    if pid not in seen:
+                        seen.add(pid)
+                        added_names.add(friendly_name.lower())
+                        results.append({
+                            "pid": pid,
+                            "name": friendly_name,
+                            "title": friendly_name,
+                            "appType": app_type,
+                            "isActive": False
+                        })
+        except Exception:
+            continue
+
+    # Sort active audio streams to top
+    results.sort(key=lambda x: not x.get("isActive", False))
     return results
 
 def recording_loop():

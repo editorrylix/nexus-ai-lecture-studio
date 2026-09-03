@@ -63,10 +63,14 @@ function ModernCursor() {
   const [isInteractive, setIsInteractive] = useState(false)
   const [isText, setIsText] = useState(false)
   const [isClicking, setIsClicking] = useState(false)
+  const [isVisible, setIsVisible] = useState(false)
+  const [clickCount, setClickCount] = useState(0)
 
   useEffect(() => {
     const handleMove = (e: MouseEvent) => {
       setPos({ x: e.clientX, y: e.clientY })
+      if (!isVisible) setIsVisible(true)
+
       const target = e.target as HTMLElement
       if (!target) return
 
@@ -84,27 +88,49 @@ function ModernCursor() {
       }
     }
 
-    const handleDown = () => setIsClicking(true)
+    const handleDown = () => {
+      setIsClicking(true)
+      setClickCount(c => c + 1)
+    }
     const handleUp = () => setIsClicking(false)
+    const handleLeave = () => setIsVisible(false)
+    const handleEnter = () => setIsVisible(true)
 
     window.addEventListener('mousemove', handleMove, { passive: true })
     window.addEventListener('mousedown', handleDown)
     window.addEventListener('mouseup', handleUp)
+    document.addEventListener('mouseleave', handleLeave)
+    document.addEventListener('mouseenter', handleEnter)
+
     return () => {
       window.removeEventListener('mousemove', handleMove)
       window.removeEventListener('mousedown', handleDown)
       window.removeEventListener('mouseup', handleUp)
+      document.removeEventListener('mouseleave', handleLeave)
+      document.removeEventListener('mouseenter', handleEnter)
     }
-  }, [])
+  }, [isVisible])
 
   return (
     <div 
-      className="pointer-events-none fixed top-0 left-0 z-[999999] will-change-transform mix-blend-difference hidden md:block select-none"
+      className={`pointer-events-none fixed top-0 left-0 z-[999999] will-change-transform mix-blend-difference hidden md:block select-none transition-opacity duration-150 ${
+        isVisible ? 'opacity-100' : 'opacity-0'
+      }`}
       style={{
-        transform: `translate3d(${pos.x}px, ${pos.y}px, 0)`,
-        transition: 'transform 0.04s linear'
+        transform: `translate3d(${pos.x}px, ${pos.y}px, 0)`
       }}
     >
+      {/* Special Effect 1: Inverted Click Diamond Shockwave Pulse */}
+      {clickCount > 0 && (
+        <motion.div
+          key={clickCount}
+          initial={{ scale: 0.3, opacity: 1 }}
+          animate={{ scale: 2.4, opacity: 0 }}
+          transition={{ duration: 0.28, ease: "easeOut" }}
+          className="absolute -top-1.5 -left-1.5 w-4 h-4 border-2 border-white rotate-45 pointer-events-none"
+        />
+      )}
+
       {/* State A: Inverted Text Beam (Unobstructed Sentence Reading) */}
       <div 
         className={`absolute -top-2 left-0 transition-opacity duration-150 ${
@@ -114,12 +140,26 @@ function ModernCursor() {
         <div className="w-[1.5px] h-4 bg-white shadow-sm" />
       </div>
 
-      {/* State B: Compact Stealth Arrow (Zero Circles, Zero Text Occlusion) */}
+      {/* State B: Precision Stealth Pointer & Interactive Reticle */}
       <div 
-        className={`absolute -top-0.5 -left-0.5 transition-all duration-150 ${
+        className={`absolute -top-0.5 -left-0.5 transition-transform duration-75 ${
           !isText ? 'opacity-100' : 'opacity-0 pointer-events-none'
-        } ${isClicking ? 'scale-90' : isInteractive ? 'scale-110' : 'scale-100'}`}
+        } ${isClicking ? 'scale-[0.82]' : isInteractive ? 'scale-110' : 'scale-100'}`}
       >
+        {/* Special Effect 2: Precision Corner Brackets on Interactive Elements */}
+        {isInteractive && !isText && (
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="absolute -top-1 -left-1 w-6 h-6 pointer-events-none"
+          >
+            <div className="absolute top-0 left-0 w-1.5 h-1.5 border-t border-l border-white" />
+            <div className="absolute top-0 right-0 w-1.5 h-1.5 border-t border-r border-white" />
+            <div className="absolute bottom-0 left-0 w-1.5 h-1.5 border-b border-l border-white" />
+            <div className="absolute bottom-0 right-0 w-1.5 h-1.5 border-b border-r border-white" />
+          </motion.div>
+        )}
+
         <svg width="18" height="18" viewBox="0 0 24 24" className="fill-white drop-shadow-sm">
           <path d="M2 2L18 10L11 12L8.5 19L2 2Z" />
         </svg>
