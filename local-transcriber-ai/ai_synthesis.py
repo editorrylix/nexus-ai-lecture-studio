@@ -1,4 +1,5 @@
 import os
+import sys
 import json
 import glob
 import time
@@ -17,6 +18,24 @@ try:
                 k, v = line.strip().split('=', 1)
                 os.environ[k] = v
 except: pass
+
+def update_progress(stage: str, percent: int, message: str, session_id: str = None):
+    """Writes real-time synthesis progress to a shared JSON file for UI polling."""
+    try:
+        storage_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../storage'))
+        os.makedirs(storage_dir, exist_ok=True)
+        progress_file = os.path.join(storage_dir, 'synthesis_progress.json')
+        data = {
+            "stage": stage,
+            "percent": percent,
+            "message": message,
+            "sessionId": session_id,
+            "timestamp": time.time()
+        }
+        with open(progress_file, 'w', encoding='utf-8') as f:
+            json.dump(data, f)
+    except Exception as e:
+        print(f"[PROGRESS] Error: {e}")
 
 class Flashcard(BaseModel):
     front: str
@@ -39,7 +58,9 @@ class MeetingSynthesis(BaseModel):
     course_outline: List[CourseSection]
 
 def get_latest_audio() -> str:
-    list_of_files = glob.glob('recording_*.wav')
+    storage_rec = os.path.abspath(os.path.join(os.path.dirname(__file__), '../storage/recordings'))
+    pattern = os.path.join(storage_rec, 'recording_*.wav')
+    list_of_files = glob.glob(pattern)
     if not list_of_files:
         return None
     return max(list_of_files, key=os.path.getctime)
@@ -108,6 +129,7 @@ def process_audio(audio_path: str) -> MeetingSynthesis:
         raise ValueError(f"Recording file '{audio_path}' is virtually empty ({os.path.getsize(audio_path) if os.path.exists(audio_path) else 0} bytes). Make sure the selected application was playing audible sound during the recording.")
 
     # 1. Always Transcribe 100% Locally (Zero Audio Uploaded to Cloud)
+    update_progress("transcribing", 20, "Transcribing lecture audio locally on CPU via Faster-Whisper...")
     import local_stt
     print(f"[LOCAL STT] Transcribing {audio_path} locally on CPU via Faster-Whisper...")
     stt_res = local_stt.transcribe_audio_file(audio_path, model_size="tiny.en")
@@ -117,14 +139,17 @@ def process_audio(audio_path: str) -> MeetingSynthesis:
         print("[LOCAL STT] No audible speech detected in audio file.")
         transcript = "No audible speech was detected in this recording."
 
-    print(f"[LOCAL STT] Local transcript generated ({len(transcript)} chars). Zero audio sent to cloud.")
+    word_count = len(transcript.split())
+    print(f"[LOCAL STT] Local transcript generated ({word_count} words). Zero audio sent to cloud.")
 
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
         print("[AI] GEMINI_API_KEY not set. Using 100% offline local notes synthesis.")
+        update_progress("synthesizing", 60, "Synthesizing offline lecture notes & flashcards...")
         return process_audio_locally(audio_path)
     
     # 2. Use Gemini API ONLY for Text Intelligence (Summary, Outline, Flashcards, Glossary)
+    update_progress("synthesizing", 55, f"Transcription complete ({word_count} words). Generating AI lecture synthesis with Gemini 3.6 Flash...")
     try:
         client = genai.Client(api_key=api_key)
         print("Sending clean transcript to Gemini 3.6 Flash for education synthesis & study tools...")
@@ -146,7 +171,7 @@ def process_audio(audio_path: str) -> MeetingSynthesis:
         """
         
         response = client.models.generate_content(
-            model='gemini-3.6-flash',
+            model='gemini-3.5-flash',
             contents=prompt,
             config={
                 'response_mime_type': 'application/json',
@@ -212,6 +237,7 @@ def save_session_local(synthesis: MeetingSynthesis, audio_path: str = None) -> d
     session_id = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     anki_url = generate_anki_deck(synthesis, session_id)
     
+    update_progress("flashcards", 80, "Generating spaced repetition flashcards & Anki deck...")
     summary_lines = [l.strip() for l in synthesis.summary.split('\n') if l.strip() and not l.startswith('#')]
     title = summary_lines[0][:60] if summary_lines else f"Lecture - {datetime.datetime.now().strftime('%b %d, %I:%M %p')}"
     
@@ -236,6 +262,7 @@ def save_session_local(synthesis: MeetingSynthesis, audio_path: str = None) -> d
         "tags": ["Local Recording"]
     }
     
+    update_progress("saving", 92, "Saving to Obsidian markdown & local session vault...")
     sessions_file = os.path.join(storage_dir, 'sessions.json')
     sessions = []
     if os.path.exists(sessions_file):
@@ -258,17 +285,21 @@ def save_session_local(synthesis: MeetingSynthesis, audio_path: str = None) -> d
         f.write("## Action Items\n" + "\n".join(f"- [ ] {i}" for i in synthesis.action_items) + "\n\n")
         f.write("## Full Transcript\n" + synthesis.raw_transcript + "\n")
 
+    update_progress("done", 100, "Lecture study package ready!", session_id=session_obj["id"])
     return session_obj
 
 if __name__ == "__main__":
     audio_file = sys.argv[1] if len(sys.argv) > 1 and os.path.exists(sys.argv[1]) else get_latest_audio()
     if audio_file:
         try:
+            print(f"Processing audio: {audio_file}")
             synthesis = process_audio(audio_file)
             print("\n--- Summary ---")
             print(synthesis.summary)
-            save_session_local(synthesis, audio_file)
+            session = save_session_local(synthesis, audio_file)
+            print("Session successfully created:", session["id"])
         except Exception as e:
             print(f"Error processing audio: {e}")
+            update_progress("error", 0, f"Processing error: {e}")
     else:
         print("No audio (.wav) files found.")

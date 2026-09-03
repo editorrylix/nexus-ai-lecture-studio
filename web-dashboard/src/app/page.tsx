@@ -50,7 +50,8 @@ import {
   CornerDownLeft,
   Share2,
   PanelLeft,
-  PanelLeftClose
+  PanelLeftClose,
+  Loader2
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Image from 'next/image'
@@ -343,6 +344,12 @@ export default function Dashboard() {
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [showExportMenu, setShowExportMenu] = useState(false)
   const [liveTranscript, setLiveTranscript] = useState('')
+  const [synthesisProgress, setSynthesisProgress] = useState<{
+    stage: string;
+    percent: number;
+    message: string;
+    sessionId?: string;
+  } | null>(null)
 
   const showToast = (text: string, type: 'success' | 'error' | 'info' = 'info') => {
     setToastMessage({ type, text })
@@ -382,18 +389,24 @@ export default function Dashboard() {
   }, [])
 
   // Load Sessions
-  const fetchSessions = async () => {
+  const fetchSessions = async (autoSelectId?: any) => {
+    const targetId = typeof autoSelectId === 'string' ? autoSelectId : undefined
     setIsRefreshing(true)
     try {
       const res = await fetch('/api/sessions', { cache: 'no-store' })
       if (res.ok) {
         const data = await res.json()
-        setSessions(data.sessions || [])
+        const fetchedSessions = data.sessions || []
+        setSessions(fetchedSessions)
         setStorageDir(data.storageDir || '')
         setSelectedSession((prev: any) => {
-          if (!prev && data.sessions?.length > 0) return data.sessions[0]
+          if (targetId) {
+            const match = fetchedSessions.find((s: any) => s.id === targetId)
+            if (match) return match
+          }
+          if (!prev && fetchedSessions.length > 0) return fetchedSessions[0]
           if (prev) {
-            const updated = data.sessions?.find((s: any) => s.id === prev.id)
+            const updated = fetchedSessions.find((s: any) => s.id === prev.id)
             if (updated) return updated
           }
           return prev
@@ -419,6 +432,12 @@ export default function Dashboard() {
           setVuLevel(data.vuLevel || 0)
           if (data.liveTranscript) {
             setLiveTranscript(data.liveTranscript)
+          }
+          if (data.progress) {
+            setSynthesisProgress(data.progress)
+            if (data.progress.stage === 'done' && data.progress.sessionId) {
+              fetchSessions(data.progress.sessionId)
+            }
           }
         }
       }
@@ -753,6 +772,85 @@ export default function Dashboard() {
             {toastMessage.type === 'success' && <Check className="w-3.5 h-3.5 text-emerald-400" />}
             {toastMessage.type === 'info' && <Circle className="w-3 h-3 text-cyan-400 fill-current" />}
             <span>{toastMessage.text}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* --- LIVE PROCESSING & SYNTHESIS PROGRESS HUD MODAL --- */}
+      <AnimatePresence>
+        {(isProcessingAI || (synthesisProgress && synthesisProgress.stage !== 'done' && synthesisProgress.stage !== 'idle' && synthesisProgress.stage !== 'error')) && (
+          <motion.div
+            initial={{ opacity: 0, y: 30, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 30, scale: 0.95 }}
+            className="fixed bottom-6 right-8 z-[100] w-[370px] rounded-3xl bg-[#0C0F17]/95 backdrop-blur-2xl border border-white/[0.12] p-5 shadow-2xl shadow-black/80 ring-1 ring-white/10"
+          >
+            {/* Header with Live Beacon and Percentage */}
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="relative flex h-2.5 w-2.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-cyan-500"></span>
+                </div>
+                <span className="text-[11px] font-semibold tracking-wider uppercase text-zinc-300">
+                  AI Lecture Synthesizer
+                </span>
+              </div>
+              <span className="text-[11px] font-mono font-bold text-cyan-400 bg-cyan-950/60 px-2 py-0.5 rounded-full border border-cyan-800/40">
+                {synthesisProgress?.percent || 20}%
+              </span>
+            </div>
+
+            {/* Glowing Gradient Progress Bar */}
+            <div className="w-full h-2 rounded-full bg-white/[0.06] overflow-hidden mb-3.5 p-[1px] border border-white/[0.05]">
+              <motion.div 
+                className="h-full rounded-full bg-gradient-to-r from-cyan-500 via-sky-400 to-indigo-500 shadow-sm"
+                initial={{ width: '15%' }}
+                animate={{ width: `${synthesisProgress?.percent || 25}%` }}
+                transition={{ duration: 0.6, ease: "easeOut" }}
+              />
+            </div>
+
+            {/* Granular Step List */}
+            <div className="space-y-2 text-[11px]">
+              <div className="flex items-center gap-2.5">
+                <div className={`w-2 h-2 rounded-full transition-all ${
+                  synthesisProgress?.stage === 'transcribing' ? 'bg-cyan-400 ring-4 ring-cyan-500/20 animate-pulse' : 
+                  (synthesisProgress?.percent || 0) > 20 ? 'bg-emerald-400' : 'bg-white/20'
+                }`} />
+                <span className={synthesisProgress?.stage === 'transcribing' ? 'text-white font-medium' : 'text-zinc-400'}>
+                  1. Local Faster-Whisper ASR (CPU int8)
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2.5">
+                <div className={`w-2 h-2 rounded-full transition-all ${
+                  synthesisProgress?.stage === 'synthesizing' ? 'bg-cyan-400 ring-4 ring-cyan-500/20 animate-pulse' : 
+                  (synthesisProgress?.percent || 0) > 60 ? 'bg-emerald-400' : 'bg-white/20'
+                }`} />
+                <span className={synthesisProgress?.stage === 'synthesizing' ? 'text-white font-medium' : 'text-zinc-400'}>
+                  2. AI Synthesis (Summary, Outline, Terms)
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2.5">
+                <div className={`w-2 h-2 rounded-full transition-all ${
+                  synthesisProgress?.stage === 'flashcards' || synthesisProgress?.stage === 'saving' ? 'bg-cyan-400 ring-4 ring-cyan-500/20 animate-pulse' : 
+                  (synthesisProgress?.percent || 0) >= 90 ? 'bg-emerald-400' : 'bg-white/20'
+                }`} />
+                <span className={synthesisProgress?.stage === 'flashcards' || synthesisProgress?.stage === 'saving' ? 'text-white font-medium' : 'text-zinc-400'}>
+                  3. Anki Deck & Markdown Vault Export
+                </span>
+              </div>
+            </div>
+
+            {/* Current Action Live Message */}
+            <div className="mt-3.5 pt-2.5 border-t border-white/[0.08] flex items-center justify-between text-[11px] text-zinc-300">
+              <span className="truncate italic pr-2">
+                {synthesisProgress?.message || "Synthesizing lecture audio..."}
+              </span>
+              <Loader2 className="w-3.5 h-3.5 text-cyan-400 animate-spin flex-shrink-0" />
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

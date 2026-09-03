@@ -320,7 +320,12 @@ def stop_capture():
         try:
             python_exe = sys.executable
             synth_script = os.path.join(os.path.dirname(__file__), "ai_synthesis.py")
-            res = subprocess.run([python_exe, synth_script], capture_output=True, text=True)
+            wav_arg = state.get("currentWav") or ""
+            args = [python_exe, synth_script]
+            if wav_arg and os.path.exists(wav_arg):
+                args.append(wav_arg)
+
+            res = subprocess.run(args, capture_output=True, text=True)
             if res.returncode == 0:
                 state["lastSavedSession"] = "Saved"
             else:
@@ -358,6 +363,17 @@ class DaemonHandler(BaseHTTPRequestHandler):
             elapsed = 0
             if state["isRecording"] and state["startTime"]:
                 elapsed = int(time.time() - state["startTime"])
+
+            progress_info = None
+            try:
+                storage_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../storage'))
+                prog_file = os.path.join(storage_dir, 'synthesis_progress.json')
+                if os.path.exists(prog_file):
+                    with open(prog_file, 'r', encoding='utf-8') as f:
+                        progress_info = json.load(f)
+            except Exception:
+                pass
+
             self._send_json({
                 "isRecording": state["isRecording"],
                 "isProcessing": state["isProcessing"],
@@ -367,7 +383,8 @@ class DaemonHandler(BaseHTTPRequestHandler):
                 "targetName": state["targetName"],
                 "lastError": state["lastError"],
                 "lastSaved": state["lastSavedSession"],
-                "liveTranscript": state.get("liveTranscript", "")
+                "liveTranscript": state.get("liveTranscript", ""),
+                "progress": progress_info
             })
         else:
             self._send_json({"status": "Nexus Audio Daemon Online", "version": "2.0"})

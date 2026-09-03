@@ -43,6 +43,8 @@ storage/recordings/
 storage/exports/
 storage/markdown/
 storage/sessions.json
+storage/synthesis_progress.json
+storage/*.json
 *.wav
 *.mp3
 *.apkg
