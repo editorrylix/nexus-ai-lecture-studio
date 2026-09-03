@@ -3,3 +3,7 @@ silero-vad
 numpy
 google-genai
 supabase
+pycaw
+psutil
+pystray
+pillow

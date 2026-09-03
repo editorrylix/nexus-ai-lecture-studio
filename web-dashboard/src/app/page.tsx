@@ -44,13 +44,16 @@ import {
   Code,
   UploadCloud,
   Play,
-  Pause
+  Pause,
+  Command,
+  Sparkles,
+  CornerDownLeft
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Image from 'next/image'
 
 // ==========================================
-// 1. CUSTOM MODERN CURSOR (Inspired by modern design studios)
+// 1. CUSTOM COLOR-INVERTING GEOMETRIC CURSOR (Zero Circles)
 // ==========================================
 function ModernCursor() {
   const [pos, setPos] = useState({ x: -100, y: -100 })
@@ -76,7 +79,7 @@ function ModernCursor() {
       const interactive = target?.closest('button, a, [role="button"], .interactive-element')
       if (interactive) {
         setIsHovered(true)
-        const label = interactive.getAttribute('data-cursor') || (interactive.tagName === 'BUTTON' ? 'CLICK' : 'VIEW')
+        const label = interactive.getAttribute('data-cursor') || (interactive.tagName === 'BUTTON' ? 'ACTIVATE' : 'SELECT')
         setHoverLabel(label)
       } else {
         setIsHovered(false)
@@ -98,60 +101,73 @@ function ModernCursor() {
   }, [])
 
   return (
-    <div className="pointer-events-none fixed inset-0 z-[999999] overflow-hidden hidden md:block select-none">
-      {/* 1. Precision Center Dot (Follows 1:1 instantaneously without lag) */}
-      <div 
-        className="fixed top-0 left-0 rounded-full bg-white pointer-events-none"
-        style={{
-          width: isInput ? '2px' : '6px',
-          height: isInput ? '18px' : '6px',
-          borderRadius: isInput ? '1px' : '9999px',
-          transform: `translate3d(${pos.x - (isInput ? 1 : 3)}px, ${pos.y - (isInput ? 9 : 3)}px, 0)`,
-          boxShadow: '0 0 10px rgba(255,255,255,0.9)'
-        }}
-      />
-
-      {/* 2. Trailing Outer Halo Ring (Physics Spring) */}
-      {!isInput && (
+    <div className="pointer-events-none fixed inset-0 z-[999999] overflow-hidden hidden md:block select-none mix-blend-difference">
+      {/* 1. Inverted Precision Stealth Arrowhead (Zero Circles) */}
+      {!isHovered && !isInput && (
         <motion.div
-          className="fixed top-0 left-0 rounded-full border border-white/40 pointer-events-none flex items-center justify-center"
+          className="fixed top-0 left-0 pointer-events-none"
           animate={{
-            x: pos.x - (isHovered ? 26 : 16),
-            y: pos.y - (isHovered ? 26 : 16),
-            width: isHovered ? 52 : 32,
-            height: isHovered ? 52 : 32,
-            borderColor: isHovered ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.3)',
-            backgroundColor: isHovered ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.01)',
-            scale: isClicking ? 0.85 : 1,
+            x: pos.x,
+            y: pos.y,
+            scale: isClicking ? 0.82 : 1,
           }}
-          transition={{ type: "spring", stiffness: 350, damping: 24, mass: 0.1 }}
-          style={{ backdropFilter: isHovered ? 'blur(2px)' : 'none' }}
+          transition={{ type: "spring", stiffness: 850, damping: 45, mass: 0.08 }}
         >
-          {isHovered && (
-            <div className="absolute -top-1 -right-1 w-2 h-2 border-t-2 border-r-2 border-white rounded-tr-sm" />
-          )}
+          <svg width="22" height="22" viewBox="0 0 24 24" className="fill-white">
+            <path d="M2 2L20 11L12 13.5L9 21L2 2Z" />
+          </svg>
         </motion.div>
       )}
 
-      {/* 3. Dynamic Interactive Tag */}
-      <AnimatePresence>
-        {isHovered && hoverLabel && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.6, y: 10 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.6, y: 5 }}
-            className="fixed top-0 left-0 pointer-events-none"
-            style={{
-              transform: `translate3d(${pos.x + 22}px, ${pos.y + 14}px, 0)`
-            }}
-          >
-            <div className="bg-white text-black px-1.5 py-0.5 rounded text-[9px] font-mono font-bold tracking-widest shadow-xl flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping" />
-              <span>{hoverLabel}</span>
+      {/* 2. Inverted Geometric Corner Reticle on Hover (Zero Circles) */}
+      {isHovered && !isInput && (
+        <motion.div
+          className="fixed top-0 left-0 pointer-events-none"
+          animate={{
+            x: pos.x - 18,
+            y: pos.y - 18,
+            scale: isClicking ? 0.85 : 1,
+          }}
+          transition={{ type: "spring", stiffness: 600, damping: 32, mass: 0.1 }}
+        >
+          <div className="w-9 h-9 relative">
+            {/* 4 Sharp Corner Brackets - pure white inverted */}
+            <div className="absolute top-0 left-0 w-2.5 h-2.5 border-t-2 border-l-2 border-white" />
+            <div className="absolute top-0 right-0 w-2.5 h-2.5 border-t-2 border-r-2 border-white" />
+            <div className="absolute bottom-0 left-0 w-2.5 h-2.5 border-b-2 border-l-2 border-white" />
+            <div className="absolute bottom-0 right-0 w-2.5 h-2.5 border-b-2 border-r-2 border-white" />
+            
+            {/* Center Precision Diamond Reticle */}
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="w-1.5 h-1.5 bg-white rotate-45" />
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+
+            {/* Inverted Monospace Action Tag */}
+            {hoverLabel && (
+              <div className="absolute left-11 top-1 bg-white text-black px-1.5 py-0.5 text-[8px] font-mono font-bold tracking-widest uppercase flex items-center gap-1 shadow-md">
+                <span>{hoverLabel}</span>
+                <span className="text-[7px]">↗</span>
+              </div>
+            )}
+          </div>
+        </motion.div>
+      )}
+
+      {/* 3. Inverted Precision Serif I-Beam for Text Inputs (Zero Circles) */}
+      {isInput && (
+        <div
+          className="fixed top-0 left-0 pointer-events-none"
+          style={{
+            transform: `translate3d(${pos.x - 4}px, ${pos.y - 10}px, 0)`
+          }}
+        >
+          <div className="w-2 h-5 flex flex-col items-center justify-between">
+            <div className="w-2.5 h-[2px] bg-white" />
+            <div className="w-[2px] h-3.5 bg-white" />
+            <div className="w-2.5 h-[2px] bg-white" />
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -205,6 +221,53 @@ function Card3D({ children, className = "" }: { children: React.ReactNode, class
   )
 }
 
+// ==========================================
+// 3. ANIMATED AUDIO CANVAS WAVEFORM
+// ==========================================
+function CanvasWaveform({ isPlaying }: { isPlaying: boolean }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    let animationId: number
+    let phase = 0
+
+    const render = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height)
+      const bars = 22
+      const barWidth = 3
+      const gap = 3
+      const totalWidth = bars * (barWidth + gap)
+      const startX = (canvas.width - totalWidth) / 2
+
+      for (let i = 0; i < bars; i++) {
+        let height = 3
+        if (isPlaying) {
+          height = 3 + Math.sin(phase + i * 0.45) * 7 + Math.cos(phase * 1.3 + i * 0.3) * 5
+          height = Math.max(3, Math.min(18, height))
+        }
+        const x = startX + i * (barWidth + gap)
+        const y = (canvas.height - height) / 2
+
+        ctx.fillStyle = isPlaying ? 'rgba(255, 255, 255, 0.85)' : 'rgba(255, 255, 255, 0.2)'
+        ctx.fillRect(x, y, barWidth, height)
+      }
+
+      if (isPlaying) phase += 0.15
+      animationId = requestAnimationFrame(render)
+    }
+
+    render()
+    return () => cancelAnimationFrame(animationId)
+  }, [isPlaying])
+
+  return <canvas ref={canvasRef} width={135} height={24} className="hidden sm:block" />
+}
+
 // App icons
 function AppIcon({ appType }: { appType: string }) {
   const type = (appType || '').toLowerCase()
@@ -239,8 +302,12 @@ export default function Dashboard() {
   const [selectedForStitch, setSelectedForStitch] = useState<string[]>([])
   const [isStitching, setIsStitching] = useState(false)
 
-  // Settings Modal State
+  // Settings & Command Palette State
   const [showSettings, setShowSettings] = useState(false)
+  const [showCommandPalette, setShowCommandPalette] = useState(false)
+  const [commandQuery, setCommandQuery] = useState('')
+  const [commandIndex, setCommandIndex] = useState(0)
+  const [showShortcuts, setShowShortcuts] = useState(false)
 
   // Audio Studio State
   const [showStudio, setShowStudio] = useState(false)
@@ -261,16 +328,35 @@ export default function Dashboard() {
     setTimeout(() => setToastMessage(null), 3000)
   }
 
-  // Initial Load
+  // Initial Load & Global Keyboard Shortcuts
   useEffect(() => {
     fetchSessions()
     checkAudioStatus()
     const sessionInterval = setInterval(fetchSessions, 6000)
     const audioInterval = setInterval(checkAudioStatus, 1500)
     setMounted(true)
+
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      // Cmd/Ctrl + K (Spotlight Command Palette)
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        setShowCommandPalette(prev => !prev)
+      } else if (e.key === 'Escape') {
+        setShowCommandPalette(false)
+        setShowShortcuts(false)
+        setShowSettings(false)
+      } else if (e.key === '?' && !['input', 'textarea'].includes((e.target as HTMLElement)?.tagName?.toLowerCase())) {
+        e.preventDefault()
+        setShowShortcuts(prev => !prev)
+      }
+    }
+
+    window.addEventListener('keydown', handleGlobalKeyDown)
+
     return () => {
       clearInterval(sessionInterval)
       clearInterval(audioInterval)
+      window.removeEventListener('keydown', handleGlobalKeyDown)
     }
   }, [])
 
@@ -528,6 +614,34 @@ export default function Dashboard() {
     )
   }, [sessions, searchQuery])
 
+  // Command Palette Items
+  const commandItems = useMemo(() => {
+    const q = commandQuery.toLowerCase().trim()
+    const actions = [
+      { id: 'act-record', title: isRecording ? 'Stop Recording' : 'Start Lecture Recording', category: 'Actions', icon: Mic, run: () => { setShowStudio(true); if (!showStudio) scanProcesses() } },
+      { id: 'act-summary', title: 'View Executive Summary', category: 'Navigate', icon: Layout, run: () => setActiveTab('summary') },
+      { id: 'act-flashcards', title: 'Study Flashcards', category: 'Navigate', icon: Layers, run: () => setActiveTab('flashcards') },
+      { id: 'act-quiz', title: 'Take Practice Quiz', category: 'Navigate', icon: GraduationCap, run: () => setActiveTab('quiz') },
+      { id: 'act-transcript', title: 'Read Full Transcript', category: 'Navigate', icon: FileText, run: () => setActiveTab('transcript') },
+      { id: 'act-chat', title: 'Ask AI Study Assistant', category: 'Navigate', icon: MessageSquare, run: () => setActiveTab('chat') },
+      { id: 'act-import', title: 'Import Audio File', category: 'Actions', icon: UploadCloud, run: () => fileInputRef.current?.click() },
+      { id: 'act-markdown', title: 'Export Markdown for Obsidian', category: 'Export', icon: FileDown, run: () => handleExportMarkdown() },
+      { id: 'act-stitch', title: 'Stitch Multiple Sessions', category: 'Actions', icon: GitMerge, run: () => setStitchMode(true) },
+    ]
+
+    const sessionMatches = sessions.map(s => ({
+      id: `session-${s.id}`,
+      title: s.title || 'Untitled Lecture',
+      category: 'Lectures',
+      icon: BookOpen,
+      run: () => setSelectedSession(s)
+    }))
+
+    const all = [...actions, ...sessionMatches]
+    if (!q) return all
+    return all.filter(item => item.title.toLowerCase().includes(q) || item.category.toLowerCase().includes(q))
+  }, [commandQuery, sessions, isRecording, showStudio])
+
   const handleCopySummary = () => {
     if (!selectedSession?.summary) return
     navigator.clipboard.writeText(selectedSession.summary)
@@ -586,10 +700,10 @@ export default function Dashboard() {
   return (
     <div className="flex flex-col h-screen w-full bg-[#07080B] text-[#F3F4F6] font-sans overflow-hidden selection:bg-white/20 selection:text-white relative">
       
-      {/* 1. Custom Smooth Magnetic Cursor */}
+      {/* 1. Inverted Geometric Custom Cursor (Zero Circles) */}
       <ModernCursor />
 
-      {/* 2. Ambient 3D Depth Lights (Behind Glass) */}
+      {/* 2. Ambient Depth Lights */}
       <div className="absolute top-0 left-1/4 w-[600px] h-[350px] bg-gradient-to-br from-cyan-500/8 via-indigo-500/5 to-transparent rounded-full blur-[140px] pointer-events-none" />
       <div className="absolute bottom-0 right-1/4 w-[500px] h-[300px] bg-gradient-to-tl from-purple-500/6 via-blue-500/4 to-transparent rounded-full blur-[130px] pointer-events-none" />
 
@@ -858,12 +972,21 @@ export default function Dashboard() {
               <span>{isUploadingAudio ? 'Importing...' : 'Import Audio'}</span>
             </button>
 
-            <button 
-              onClick={() => setShowSettings(true)}
-              className="p-1 hover:text-white hover:bg-white/[0.06] rounded-md transition-all"
-            >
-              <Settings className="w-3.5 h-3.5 text-zinc-400" />
-            </button>
+            <div className="flex items-center gap-2">
+              <button 
+                onClick={() => setShowShortcuts(true)}
+                title="Keyboard Shortcuts (?)"
+                className="p-1 hover:text-white hover:bg-white/[0.06] rounded-md transition-all text-[11px] font-mono"
+              >
+                ?
+              </button>
+              <button 
+                onClick={() => setShowSettings(true)}
+                className="p-1 hover:text-white hover:bg-white/[0.06] rounded-md transition-all"
+              >
+                <Settings className="w-3.5 h-3.5 text-zinc-400" />
+              </button>
+            </div>
           </div>
         </aside>
 
@@ -873,7 +996,7 @@ export default function Dashboard() {
           {/* --- FLOATING APPLE FROSTED GLASS NAVIGATION BAR --- */}
           <header className="sticky top-0 z-30 px-8 py-3.5 border-b border-white/[0.06] bg-[#07080B]/60 backdrop-blur-2xl flex items-center justify-between shadow-[0_4px_30px_rgba(0,0,0,0.3)]">
             
-            {/* Left: Record Drawer Button */}
+            {/* Left: Record Drawer Button & Quick Actions */}
             <div className="flex items-center gap-3">
               <button 
                 onClick={() => {
@@ -900,6 +1023,16 @@ export default function Dashboard() {
                     <ChevronDown className={`w-3 h-3 transition-transform ${showStudio ? 'rotate-180' : ''}`} />
                   </>
                 )}
+              </button>
+
+              {/* Quick Spotlight Trigger Pill */}
+              <button 
+                onClick={() => setShowCommandPalette(true)}
+                className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/[0.03] hover:bg-white/[0.07] border border-white/[0.07] text-xs text-zinc-400 hover:text-white transition-all active:scale-95"
+              >
+                <Search className="w-3.5 h-3.5" />
+                <span className="text-[11px]">Command Palette</span>
+                <kbd className="px-1.5 py-0.5 rounded bg-white/[0.08] border border-white/[0.1] text-[10px] font-mono text-zinc-300">⌘K</kbd>
               </button>
 
               {/* Dynamic VU Audio Waveform */}
@@ -1137,6 +1270,160 @@ export default function Dashboard() {
         </main>
       </div>
 
+      {/* --- SPOTLIGHT COMMAND PALETTE MODAL (Cmd+K) --- */}
+      <AnimatePresence>
+        {showCommandPalette && (
+          <div className="fixed inset-0 z-[200] flex items-start justify-center pt-24 px-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowCommandPalette(false)}
+              className="absolute inset-0 bg-black/75 backdrop-blur-md"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: -10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: -10 }}
+              className="relative w-full max-w-xl bg-[#0F1118]/95 border border-white/[0.14] rounded-3xl overflow-hidden shadow-2xl z-10 backdrop-blur-2xl"
+            >
+              {/* Command Search Bar */}
+              <div className="p-4 border-b border-white/[0.08] flex items-center gap-3">
+                <Search className="w-4 h-4 text-zinc-400" />
+                <input 
+                  type="text"
+                  value={commandQuery}
+                  onChange={(e) => {
+                    setCommandQuery(e.target.value)
+                    setCommandIndex(0)
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'ArrowDown') {
+                      e.preventDefault()
+                      setCommandIndex(i => Math.min(commandItems.length - 1, i + 1))
+                    } else if (e.key === 'ArrowUp') {
+                      e.preventDefault()
+                      setCommandIndex(i => Math.max(0, i - 1))
+                    } else if (e.key === 'Enter') {
+                      e.preventDefault()
+                      if (commandItems[commandIndex]) {
+                        commandItems[commandIndex].run()
+                        setShowCommandPalette(false)
+                        setCommandQuery('')
+                      }
+                    }
+                  }}
+                  autoFocus
+                  placeholder="Type a command or search lectures..."
+                  className="flex-1 bg-transparent text-sm text-white placeholder-zinc-500 focus:outline-none"
+                />
+                <kbd className="px-2 py-0.5 rounded-lg bg-white/[0.08] border border-white/[0.1] text-[10px] font-mono text-zinc-400">
+                  ESC
+                </kbd>
+              </div>
+
+              {/* Command List */}
+              <div className="max-h-80 overflow-y-auto p-2 space-y-1">
+                {commandItems.map((item, idx) => {
+                  const isHighlighted = idx === commandIndex
+                  const Icon = item.icon
+                  return (
+                    <div
+                      key={item.id}
+                      onClick={() => {
+                        item.run()
+                        setShowCommandPalette(false)
+                        setCommandQuery('')
+                      }}
+                      onMouseEnter={() => setCommandIndex(idx)}
+                      className={`flex items-center justify-between px-3.5 py-2.5 rounded-2xl cursor-pointer transition-all ${
+                        isHighlighted 
+                          ? 'bg-white text-black font-medium shadow-md' 
+                          : 'text-zinc-300 hover:bg-white/[0.05]'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <Icon className={`w-4 h-4 ${isHighlighted ? 'text-black' : 'text-zinc-400'}`} />
+                        <span className="text-xs">{item.title}</span>
+                      </div>
+                      <span className={`text-[10px] font-mono ${isHighlighted ? 'text-black/60' : 'text-zinc-500'}`}>
+                        {item.category}
+                      </span>
+                    </div>
+                  )
+                })}
+
+                {commandItems.length === 0 && (
+                  <div className="py-8 text-center text-xs text-zinc-500">
+                    No results found for "{commandQuery}"
+                  </div>
+                )}
+              </div>
+
+              <div className="px-4 py-2 bg-black/40 border-t border-white/[0.06] flex items-center justify-between text-[11px] text-zinc-500 font-mono">
+                <div className="flex items-center gap-2">
+                  <span>Navigate: ↑ ↓</span>
+                  <span>•</span>
+                  <span>Select: ↵</span>
+                </div>
+                <span>Nexus Spotlight</span>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* --- KEYBOARD SHORTCUTS HUD MODAL (?) --- */}
+      <AnimatePresence>
+        {showShortcuts && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowShortcuts(false)}
+              className="absolute inset-0 bg-black/75 backdrop-blur-md"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 8 }}
+              className="relative w-full max-w-sm bg-[#0F1118] border border-white/[0.12] rounded-3xl p-6 shadow-2xl z-10"
+            >
+              <div className="flex items-center justify-between pb-3 border-b border-white/[0.06]">
+                <h3 className="text-sm font-semibold text-white">Keyboard Shortcuts</h3>
+                <button onClick={() => setShowShortcuts(false)} className="text-zinc-500 hover:text-white text-xs">
+                  ✕
+                </button>
+              </div>
+
+              <div className="mt-4 space-y-2.5 text-xs text-zinc-300">
+                <div className="flex items-center justify-between py-1 border-b border-white/[0.04]">
+                  <span>Command Palette</span>
+                  <kbd className="px-2 py-0.5 rounded bg-white/[0.08] font-mono text-[11px] text-zinc-300">⌘K / Ctrl+K</kbd>
+                </div>
+                <div className="flex items-center justify-between py-1 border-b border-white/[0.04]">
+                  <span>Flip Flashcard</span>
+                  <kbd className="px-2 py-0.5 rounded bg-white/[0.08] font-mono text-[11px] text-zinc-300">Space</kbd>
+                </div>
+                <div className="flex items-center justify-between py-1 border-b border-white/[0.04]">
+                  <span>Next / Prev Flashcard</span>
+                  <kbd className="px-2 py-0.5 rounded bg-white/[0.08] font-mono text-[11px] text-zinc-300">← / →</kbd>
+                </div>
+                <div className="flex items-center justify-between py-1 border-b border-white/[0.04]">
+                  <span>Shortcuts HUD</span>
+                  <kbd className="px-2 py-0.5 rounded bg-white/[0.08] font-mono text-[11px] text-zinc-300">?</kbd>
+                </div>
+                <div className="flex items-center justify-between py-1 border-b border-white/[0.04]">
+                  <span>Close Modals</span>
+                  <kbd className="px-2 py-0.5 rounded bg-white/[0.08] font-mono text-[11px] text-zinc-300">ESC</kbd>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* --- SETTINGS MODAL --- */}
       <AnimatePresence>
         {showSettings && (
@@ -1246,7 +1533,7 @@ export default function Dashboard() {
 }
 
 // ==========================================
-// EMBEDDED APPLE GLASS AUDIO PLAYER
+// EMBEDDED APPLE GLASS AUDIO PLAYER WITH LIVE CANVAS WAVEFORM
 // ==========================================
 function MiniAudioPlayer({ session }: { session: any }) {
   const audioRef = useRef<HTMLAudioElement>(null)
@@ -1296,7 +1583,7 @@ function MiniAudioPlayer({ session }: { session: any }) {
         <div className="flex items-center gap-3">
           <button 
             onClick={togglePlay}
-            className="w-9 h-9 rounded-full bg-white text-black flex items-center justify-center font-bold shadow-md hover:bg-zinc-200 active:scale-95 transition-all"
+            className="w-9 h-9 rounded-2xl bg-white text-black flex items-center justify-center font-bold shadow-md hover:bg-zinc-200 active:scale-95 transition-all"
           >
             {isPlaying ? <Pause className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current ml-0.5" />}
           </button>
@@ -1308,6 +1595,9 @@ function MiniAudioPlayer({ session }: { session: any }) {
             </div>
           </div>
         </div>
+
+        {/* Live Animated Waveform */}
+        <CanvasWaveform isPlaying={isPlaying} />
 
         {/* Scrub Bar */}
         <div className="flex-1 max-w-sm flex items-center gap-2">
@@ -1328,7 +1618,7 @@ function MiniAudioPlayer({ session }: { session: any }) {
         {/* Speed Pill */}
         <button 
           onClick={cycleRate}
-          className="px-2.5 py-1 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] text-xs font-mono font-medium text-zinc-200 border border-white/[0.08] active:scale-95 transition-all"
+          className="px-2.5 py-1 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] text-xs font-mono font-medium text-zinc-200 border border-white/[0.08] active:scale-95 transition-all"
         >
           {playbackRate}x
         </button>
