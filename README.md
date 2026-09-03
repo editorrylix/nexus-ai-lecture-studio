@@ -20,7 +20,7 @@
 
 <br/>
 
-[Quick Start (3 Mins)](#-quick-start-3-minutes) • [Why Nexus?](#-why-nexus-vs-alternatives) • [Key Features](#-key-features) • [Architecture](#-architecture--data-flow) • [Tech Stack](#-tech-stack) • [Obsidian & Anki](#-export-ecosystem)
+[Quick Start (3 Mins)](#-quick-start-3-minutes) • [Why Nexus?](#-why-nexus-vs-alternatives) • [System Tray Flyout](#-native-windows-11-system-tray) • [Key Features](#-key-features) • [Local Model Roadmap](#-local-transcriber-models--offline-roadmap) • [Architecture](#-architecture--data-flow) • [Tech Stack](#-tech-stack)
 
 ---
 
@@ -37,24 +37,48 @@ Traditional AI meeting notetakers like Otter.ai, Fireflies.ai, or Granola come w
 | **Pricing** | $16.99–$30 / month | $10 / month | **100% Free Forever (MIT)** |
 | **Data Privacy** | Cloud Servers (Stored Remotely) | Cloud Backend | **100% Local Hard Drive (Zero Tracking)** |
 | **Call Bot Intrusion** | Bot joins call & interrupts | Needs mic permission | **Silent Process Loopback (No bot needed)** |
+| **Background Running** | Web Tab must stay open | Desktop App | **Native Windows Tray Flyout (0 CMD Windows)** |
+| **Command Palette** | ❌ None | Limited | **✅ Spotlight `⌘K` Quick Action & Search** |
 | **Process Audio Isolation** | ❌ Captures all room noise | ❌ Captures mic | **✅ Isolates specific app (Teams/Chrome/Zoom)** |
 | **Anki Deck Export** | ❌ None | ❌ None | **✅ 1-Click `.apkg` Spaced Repetition Decks** |
 | **Obsidian Vault Notes** | ❌ None | Manual export | **✅ Direct `.md` with Callouts & Outlines** |
 | **Multi-Lecture Stitching**| ❌ No | ❌ No | **✅ Merge Part 1 & Part 2 into Master Guide** |
-| **Built-in Audio Player** | Web Only | Limited | **✅ Scrubber + 1.25x/1.5x/2.0x Speed Control** |
+| **Built-in Audio Player** | Web Only | Limited | **✅ Scrubber + Animated Waveform + Speed** |
+
+---
+
+## 🪟 Native Windows 11 System Tray
+
+Nexus runs completely in the background without leaving open command prompt windows on your screen.
+
+- **Zero Console Clutter**: Launching `Start-Nexus.bat` or `Start-Nexus.vbs` immediately hides terminal windows and sits as a sleek glowing icon in your Windows Taskbar Notification Area.
+- **Modern Acrylic Dark Flyout Widget**: Right-clicking or clicking the tray icon pops up a native dark glass card with live status, recording timer, one-click studio launch, and direct shortcuts to your Obsidian & Anki vault folders.
 
 ---
 
 ## ✨ Key Features
 
 - **🎙️ Process-Specific Audio Hook**: Captures pure digital audio directly from the sound card using Windows WASAPI. Zero microphone background noise, room echoes, or fan hum.
-- **🍎 Apple-Grade Glassmorphic UI**: Minimalist, distraction-free study environment built with frosted glass materials, subtle depth lighting, 3D interactive tilt cards, and a custom magnetic cursor.
+- **🍎 Apple-Grade Glassmorphic UI**: Minimalist, distraction-free study environment built with frosted glass materials, subtle depth lighting, 3D interactive tilt cards, and a custom color-inverting pointer.
+- **🔍 Universal Spotlight Command Palette (`⌘K` / `Ctrl+K`)**: Rapidly search through all course lectures and execute commands (record, flashcards, quiz, export) with pure keyboard navigation.
 - **⚡ Zero-Latency Streaming AI Study Assistant**: Ask questions directly about the lecture. Answers stream token-by-token in real-time (~150ms latency) powered by Google Gemini 3.6 Flash.
 - **🗂️ Automated Anki `.apkg` Generator**: Converts the most testable lecture concepts into spaced-repetition flashcards. Download and double-click to import straight into Anki Desktop or Mobile.
 - **📝 Obsidian & Notion Markdown Vault**: Structured course modules, key takeaways, and comprehensive glossaries formatted with clean Markdown for your personal second brain.
 - **🪡 Multi-Lecture Stitching**: Select multiple lecture segments or workshops and synthesize them into a unified **Master Study Guide**.
-- **🎵 Floating Audio Player**: Re-listen to any recorded lecture with variable speed playback (`1.0x`, `1.25x`, `1.5x`, `2.0x`) and interactive timeline scrubbing.
+- **🎵 Floating Audio Player**: Re-listen to any recorded lecture with variable speed playback (`1.0x`, `1.25x`, `1.5x`, `2.0x`) and live animated canvas waveforms.
 - **📤 Drag-and-Drop Audio Import**: Have a pre-recorded `.wav` or `.mp3` from your phone or classroom recording? Drop it in and Nexus will synthesize it instantly.
+
+---
+
+## 🎙️ Local Transcriber Models & Offline Roadmap
+
+While Nexus currently accelerates synthesis using Google Gemini 3.6 Flash, we are implementing a **Dual Hybrid Engine** to support 100% offline, air-gapped study environments:
+
+| Model | Footprint | CPU Speed | Latency / Windowing | Purpose in Nexus |
+| :--- | :--- | :--- | :--- | :--- |
+| **Moonshine (Useful Sensors)** | ~245MB (ONNX) | **~5x faster than Whisper** | **Sub-200ms**, dynamic windowing | 🥇 Live real-time audio loopback streaming |
+| **Faster-Whisper (`tiny.en`)** | 75MB (CTranslate2 int8) | **~10x real-time on standard CPU** | 30s chunk batch inference | 🥈 Offline post-lecture batch transcription |
+| **Ollama / Gemma 2 2B (`Q4_K_M`)** | ~1.8GB RAM | ~35 tokens/sec | Local Air-Gapped LLM | 🥉 100% Offline Flashcard & Summary Synthesis |
 
 ---
 
@@ -63,15 +87,15 @@ Traditional AI meeting notetakers like Otter.ai, Fireflies.ai, or Granola come w
 ```mermaid
 graph TD
     A[Teams / Chrome / Zoom / Spotify] -->|Windows Core Audio Loopback| B[client-audio-hook.exe - C# .NET 8]
-    B -->|Named Pipe Float32 Stream| C[audio_daemon.py - Python Service]
+    B -->|Named Pipe Float32 Stream| C[tray_app.py - Python System Tray]
     C -->|Stores Audio Locally| D[storage/recordings/*.wav]
-    C -->|Multimodal Fast Inference| E[Google Gemini 3.6 Flash]
+    C -->|Hybrid Fast Inference| E[Google Gemini 3.6 Flash / Local Whisper]
     E -->|Structured JSON Output| F[Local Vault Manager]
     F -->|Persists Index| G[storage/sessions.json]
     F -->|Generates Obsidian Note| H[storage/markdown/lecture_*.md]
     F -->|Generates Anki Deck| I[storage/exports/meeting_*.apkg]
     G -->|Local IPC Bridge| J[Next.js 16 Frosted Glass Studio]
-    J -->|Token-by-Token Streaming Assistant| K[Vercel AI SDK]
+    J -->|Spotlight Palette & Streaming AI| K[Cmd+K & Vercel AI SDK]
 ```
 
 ---
@@ -119,49 +143,23 @@ npm install
 ```
 
 ### 5. Launch Nexus Studio
-Run the one-click launcher from the project root:
+Run the silent one-click launcher from the project root:
 ```powershell
 .\Start-Nexus.bat
 ```
-*(Automatically starts the audio daemon, spins up the Next.js server, and opens `http://localhost:3000` in your browser)*.
+*(Runs silently in the system tray, starts the web studio headless, and opens `http://localhost:3000` in your browser)*.
 
 ---
 
-## 📂 Repository Structure
+## ⌨️ Keyboard Shortcuts
 
-```text
-nexus-ai-lecture-studio/
-├── Start-Nexus.bat             # 1-Click launcher script
-├── storage/                    # 100% Local storage vault (private)
-│   ├── sessions.json           # Local session index
-│   ├── recordings/             # Captured .wav audio
-│   ├── markdown/               # Obsidian-ready .md notes
-│   └── exports/                # Anki .apkg deck packages
-├── client-audio-hook/          # C# .NET 8 WASAPI loopback engine
-│   ├── Program.cs              # Process loopback audio hook
-│   └── client-audio-hook.csproj
-├── local-transcriber-ai/       # Python background daemon
-│   ├── audio_daemon.py         # HTTP IPC bridge to web studio
-│   ├── ai_synthesis.py         # Gemini 3.6 Flash synthesis engine
-│   └── transcriber.py          # Pipe listener & normalization
-└── web-dashboard/              # Apple-Grade Next.js 16 Web Studio
-    ├── src/app/
-    │   ├── page.tsx            # Frosted glass studio UI & custom cursor
-    │   └── api/
-    │       ├── audio/          # Loopback capture & upload routes
-    │       ├── sessions/       # Local CRUD & Lecture Stitching
-    │       └── chat/           # Real-time token streaming assistant
-    └── src/lib/storage.ts      # Local file storage manager
-```
-
----
-
-## 🎯 Target Use Cases & Keywords
-
-- **University & College Lectures**: Turn 2-hour Zoom/Teams lectures into actionable 5-minute study outlines and Anki decks.
-- **Engineering & Product Standups**: Capture meeting decisions and action items with zero cloud privacy risks.
-- **Medical & Law Students**: Generate high-yield spaced repetition flashcards automatically from complex audio materials.
-- **Personal Knowledge Management (PKM)**: Export directly into Obsidian vaults, Logseq, or Notion databases.
+| Shortcut | Action |
+| :--- | :--- |
+| `⌘K` / `Ctrl + K` | Open Spotlight Command Palette |
+| `Space` | Flip Flashcard (Question ↔ Answer) |
+| `←` / `→` | Previous / Next Flashcard |
+| `?` | Show Keyboard Shortcuts HUD |
+| `Esc` | Close Modals & Palettes |
 
 ---
 

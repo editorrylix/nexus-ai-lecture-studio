@@ -1,7 +1,7 @@
 """
-Nexus Windows System Tray Orchestrator
-Runs silently in the Windows Taskbar Notification Area with dynamic status,
-background daemon management, and zero visible command prompt windows.
+Nexus Windows System Tray & Modern Flyout Orchestrator
+Runs silently in the Windows Notification Area with a sleek, modern dark
+flyout widget (replacing legacy 80s Win32 menus) and background headless process management.
 """
 
 import os
@@ -14,9 +14,9 @@ import urllib.request
 from pathlib import Path
 from PIL import Image, ImageDraw
 import pystray
-from pystray import MenuItem as item
+import customtkinter as ctk
 
-# Add current directory to path
+# Paths
 CURRENT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = CURRENT_DIR.parent
 STORAGE_DIR = PROJECT_ROOT / "storage"
@@ -29,12 +29,13 @@ except ImportError:
     sys.path.append(str(CURRENT_DIR))
     import audio_daemon
 
-# Global Process Handles
+# Global Handles
 next_process = None
 tray_icon = None
+flyout_window = None
 
 def make_tray_icon(state_type="idle"):
-    """Creates a high-resolution 64x64 RGBA system tray icon with dynamic status beacon."""
+    """Generates a high-resolution 64x64 RGBA system tray icon with dynamic status beacon."""
     img = Image.new('RGBA', (64, 64), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
     
@@ -60,7 +61,7 @@ def make_tray_icon(state_type="idle"):
     return img
 
 def is_url_responding(url, timeout=1.5):
-    """Check if local HTTP server is already up."""
+    """Check if local HTTP server is responding."""
     try:
         req = urllib.request.Request(url)
         with urllib.request.urlopen(req, timeout=timeout) as response:
@@ -74,9 +75,7 @@ def ensure_nextjs_running():
     if is_url_responding("http://localhost:3000"):
         return
 
-    # Launch npm run dev headless
     try:
-        # CREATE_NO_WINDOW = 0x08000000 ensures NO CMD WINDOW is created
         CREATE_NO_WINDOW = 0x08000000
         next_process = subprocess.Popen(
             ["npm.cmd", "run", "dev"],
@@ -99,57 +98,9 @@ def open_folder(path):
     except Exception as e:
         print(f"[TRAY] Could not open folder {path}: {e}")
 
-def get_dynamic_status_label(item=None):
-    """Returns dynamic status for the right-click menu."""
-    state = audio_daemon.state
-    if state.get("isRecording"):
-        elapsed = int(time.time() - (state.get("startTime") or time.time()))
-        mins = elapsed // 60
-        secs = elapsed % 60
-        target = state.get("targetName") or "Audio"
-        return f"🔴 Recording: {target} ({mins:02d}:{secs:02d})"
-    elif state.get("isProcessing"):
-        return "⚡ Synthesizing Lecture Notes..."
-    else:
-        return "🟢 Nexus Studio: Active (localhost:3000)"
-
-def get_record_action_label(item=None):
-    state = audio_daemon.state
-    if state.get("isRecording"):
-        return "⏹️ Stop Recording & Synthesize"
-    else:
-        # Check active processes
-        procs = audio_daemon.get_audio_processes()
-        target = procs[0]["name"] if procs else "System Audio"
-        return f"🎙️ Quick Record ({target})"
-
-def toggle_recording(icon=None, item=None):
-    state = audio_daemon.state
-    if state.get("isRecording"):
-        audio_daemon.stop_capture()
-    else:
-        procs = audio_daemon.get_audio_processes()
-        if procs:
-            audio_daemon.start_capture(procs[0]["pid"], procs[0]["name"])
-        else:
-            if tray_icon:
-                tray_icon.notify("No active audio playing. Start Teams, Chrome, or Zoom.", "Nexus Studio")
-
-def restart_services(icon=None, item=None):
-    global next_process
-    if next_process:
-        try:
-            subprocess.run(["taskkill", "/F", "/T", "/PID", str(next_process.pid)], capture_output=True)
-        except Exception:
-            pass
-        next_process = None
-    ensure_nextjs_running()
-    if tray_icon:
-        tray_icon.notify("Web Studio restarted on http://localhost:3000", "Nexus Studio")
-
-def exit_application(icon=None, item=None):
+def exit_application():
     """Clean exit: stop recording, kill background server, exit tray."""
-    global next_process
+    global next_process, tray_icon
     state = audio_daemon.state
     if state.get("isRecording"):
         audio_daemon.stop_capture()
@@ -160,9 +111,276 @@ def exit_application(icon=None, item=None):
         except Exception:
             pass
 
-    if icon:
-        icon.stop()
+    if tray_icon:
+        tray_icon.stop()
     os._exit(0)
+
+# ==========================================
+# MODERN WINDOWS 11 DARK FLYOUT WIDGET
+# ==========================================
+class ModernTrayFlyout(ctk.CTk):
+    def __init__(self):
+        super().__init__()
+
+        ctk.set_appearance_mode("dark")
+        self.title("Nexus Studio")
+        self.overrideredirect(True)
+        self.attributes('-topmost', True)
+        self.configure(fg_color="#0A0D14")
+
+        # Dimensions & Position above Taskbar
+        self.width = 330
+        self.height = 420
+        screen_w = self.winfo_screenwidth()
+        screen_h = self.winfo_screenheight()
+        x = screen_w - self.width - 16
+        y = screen_h - self.height - 58
+        self.geometry(f"{self.width}x{self.height}+{x}+{y}")
+
+        # Bind dismiss on click away
+        self.bind("<FocusOut>", lambda e: self.hide_flyout())
+
+        self._build_ui()
+        self.withdraw()  # Start hidden
+
+    def _build_ui(self):
+        # Outer Card Frame
+        card = ctk.CTkFrame(
+            self,
+            fg_color="#0D1018",
+            corner_radius=20,
+            border_width=1,
+            border_color="#242B3B"
+        )
+        card.pack(fill="both", expand=True, padx=2, pady=2)
+
+        # Header
+        header = ctk.CTkFrame(card, fg_color="transparent")
+        header.pack(fill="x", padx=18, pady=(16, 12))
+
+        title_label = ctk.CTkLabel(
+            header,
+            text="⚡ NEXUS STUDIO",
+            font=ctk.CTkFont(size=14, weight="bold"),
+            text_color="#FFFFFF"
+        )
+        title_label.pack(side="left")
+
+        version_badge = ctk.CTkLabel(
+            header,
+            text="v2.4 PRO",
+            font=ctk.CTkFont(size=10, weight="bold"),
+            text_color="#00E6FF",
+            fg_color="#003B46",
+            corner_radius=6,
+            padx=6,
+            pady=2
+        )
+        version_badge.pack(side="right")
+
+        # Status Bar
+        self.status_frame = ctk.CTkFrame(card, fg_color="#131722", corner_radius=12, border_width=1, border_color="#1E2536")
+        self.status_frame.pack(fill="x", padx=18, pady=4)
+
+        self.status_indicator = ctk.CTkLabel(
+            self.status_frame,
+            text="●",
+            font=ctk.CTkFont(size=16),
+            text_color="#10B981"
+        )
+        self.status_indicator.pack(side="left", padx=(12, 6), pady=8)
+
+        self.status_text = ctk.CTkLabel(
+            self.status_frame,
+            text="Active (localhost:3000)",
+            font=ctk.CTkFont(size=12),
+            text_color="#D1D5DB"
+        )
+        self.status_text.pack(side="left", pady=8)
+
+        # Main Action: Open Web Studio
+        self.open_btn = ctk.CTkButton(
+            card,
+            text="🌐 Open Web Dashboard",
+            font=ctk.CTkFont(size=13, weight="bold"),
+            fg_color="#FFFFFF",
+            hover_color="#E5E7EB",
+            text_color="#000000",
+            corner_radius=12,
+            height=38,
+            command=self._on_open_dashboard
+        )
+        self.open_btn.pack(fill="x", padx=18, pady=(12, 6))
+
+        # Action: Quick Record
+        self.record_btn = ctk.CTkButton(
+            card,
+            text="🎙️ Quick Record Audio",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            fg_color="#161B26",
+            hover_color="#222A3A",
+            border_width=1,
+            border_color="#263147",
+            text_color="#E5E7EB",
+            corner_radius=12,
+            height=36,
+            command=self._on_toggle_record
+        )
+        self.record_btn.pack(fill="x", padx=18, pady=4)
+
+        # Section Label
+        vault_lbl = ctk.CTkLabel(
+            card,
+            text="LOCAL VAULT DIRECT ACCESS",
+            font=ctk.CTkFont(size=10, weight="bold"),
+            text_color="#6B7280"
+        )
+        vault_lbl.pack(anchor="w", padx=20, pady=(12, 4))
+
+        # Vault Shortcuts Grid
+        vault_row = ctk.CTkFrame(card, fg_color="transparent")
+        vault_row.pack(fill="x", padx=18, pady=2)
+
+        b_obsidian = ctk.CTkButton(
+            vault_row,
+            text="📝 Obsidian",
+            font=ctk.CTkFont(size=11),
+            fg_color="#131722",
+            hover_color="#1E2435",
+            corner_radius=10,
+            height=32,
+            command=lambda: open_folder(STORAGE_DIR / "markdown")
+        )
+        b_obsidian.pack(side="left", fill="x", expand=True, padx=(0, 4))
+
+        b_anki = ctk.CTkButton(
+            vault_row,
+            text="🗂️ Anki",
+            font=ctk.CTkFont(size=11),
+            fg_color="#131722",
+            hover_color="#1E2435",
+            corner_radius=10,
+            height=32,
+            command=lambda: open_folder(STORAGE_DIR / "exports")
+        )
+        b_anki.pack(side="left", fill="x", expand=True, padx=4)
+
+        b_vault = ctk.CTkButton(
+            vault_row,
+            text="📂 Vault",
+            font=ctk.CTkFont(size=11),
+            fg_color="#131722",
+            hover_color="#1E2435",
+            corner_radius=10,
+            height=32,
+            command=lambda: open_folder(STORAGE_DIR)
+        )
+        b_vault.pack(side="left", fill="x", expand=True, padx=(4, 0))
+
+        # Bottom Controls
+        footer = ctk.CTkFrame(card, fg_color="transparent")
+        footer.pack(fill="x", padx=18, pady=(16, 12))
+
+        b_restart = ctk.CTkButton(
+            footer,
+            text="🔄 Restart",
+            font=ctk.CTkFont(size=11),
+            fg_color="transparent",
+            hover_color="#1A202C",
+            text_color="#9CA3AF",
+            corner_radius=8,
+            height=28,
+            command=self._on_restart
+        )
+        b_restart.pack(side="left")
+
+        b_exit = ctk.CTkButton(
+            footer,
+            text="❌ Quit Nexus",
+            font=ctk.CTkFont(size=11),
+            fg_color="transparent",
+            hover_color="#3B1219",
+            text_color="#F87171",
+            corner_radius=8,
+            height=28,
+            command=exit_application
+        )
+        b_exit.pack(side="right")
+
+    def update_dynamic_state(self):
+        state = audio_daemon.state
+        if state.get("isRecording"):
+            elapsed = int(time.time() - (state.get("startTime") or time.time()))
+            mins = elapsed // 60
+            secs = elapsed % 60
+            target = state.get("targetName") or "Audio"
+            self.status_indicator.configure(text_color="#EF4444")
+            self.status_text.configure(text=f"Recording {target} ({mins:02d}:{secs:02d})")
+            self.record_btn.configure(
+                text="⏹️ Stop Recording & Synthesize",
+                fg_color="#7F1D1D",
+                hover_color="#991B1B"
+            )
+        elif state.get("isProcessing"):
+            self.status_indicator.configure(text_color="#F59E0B")
+            self.status_text.configure(text="Synthesizing Notes...")
+            self.record_btn.configure(
+                text="⚡ Synthesizing...",
+                fg_color="#161B26",
+                hover_color="#222A3A"
+            )
+        else:
+            self.status_indicator.configure(text_color="#10B981")
+            self.status_text.configure(text="Active (localhost:3000)")
+            procs = audio_daemon.get_audio_processes()
+            target = procs[0]["name"] if procs else "Audio"
+            self.record_btn.configure(
+                text=f"🎙️ Quick Record ({target})",
+                fg_color="#161B26",
+                hover_color="#222A3A"
+            )
+
+    def show_flyout(self):
+        self.update_dynamic_state()
+        self.deiconify()
+        self.focus_force()
+
+    def hide_flyout(self):
+        self.withdraw()
+
+    def _on_open_dashboard(self):
+        open_web_studio()
+        self.hide_flyout()
+
+    def _on_toggle_record(self):
+        state = audio_daemon.state
+        if state.get("isRecording"):
+            audio_daemon.stop_capture()
+        else:
+            procs = audio_daemon.get_audio_processes()
+            if procs:
+                audio_daemon.start_capture(procs[0]["pid"], procs[0]["name"])
+        self.hide_flyout()
+
+    def _on_restart(self):
+        global next_process
+        if next_process:
+            try:
+                subprocess.run(["taskkill", "/F", "/T", "/PID", str(next_process.pid)], capture_output=True)
+            except Exception:
+                pass
+            next_process = None
+        ensure_nextjs_running()
+        self.hide_flyout()
+
+def on_tray_action(icon, item=None):
+    """Triggered on clicking or right-clicking tray icon: toggles modern flyout."""
+    global flyout_window
+    if flyout_window:
+        if flyout_window.state() == "normal":
+            flyout_window.after(0, flyout_window.hide_flyout)
+        else:
+            flyout_window.after(0, flyout_window.show_flyout)
 
 def status_icon_updater(icon):
     """Periodically checks recording state to swap tray icon (green dot vs red pulsing)."""
@@ -183,28 +401,8 @@ def status_icon_updater(icon):
         except Exception:
             pass
 
-def build_menu():
-    """Builds the dynamic right-click menu for the Windows notification tray."""
-    vault_menu = pystray.Menu(
-        item("📂 Open Local Vault", lambda icon, it: open_folder(STORAGE_DIR)),
-        item("📝 Open Markdown Notes", lambda icon, it: open_folder(STORAGE_DIR / "markdown")),
-        item("🗂️ Open Anki Decks", lambda icon, it: open_folder(STORAGE_DIR / "exports")),
-        item("🎵 Open Audio Recordings", lambda icon, it: open_folder(STORAGE_DIR / "recordings")),
-    )
-
-    return pystray.Menu(
-        item(get_dynamic_status_label, lambda icon, it: None, enabled=False),
-        pystray.Menu.SEPARATOR,
-        item("🌐 Open Web Studio", lambda icon, it: open_web_studio(), default=True),
-        item(get_record_action_label, lambda icon, it: toggle_recording(icon, it)),
-        item("📁 Storage Vault", vault_menu),
-        pystray.Menu.SEPARATOR,
-        item("🔄 Restart Web Studio", lambda icon, it: restart_services(icon, it)),
-        item("❌ Exit Nexus", lambda icon, it: exit_application(icon, it))
-    )
-
 def main():
-    global tray_icon
+    global tray_icon, flyout_window
 
     # 1. Start Audio Daemon in background daemon thread
     daemon_thread = threading.Thread(target=audio_daemon.run, daemon=True)
@@ -213,32 +411,37 @@ def main():
     # 2. Start Next.js in background headless process
     threading.Thread(target=ensure_nextjs_running, daemon=True).start()
 
-    # 3. Create Tray Icon
+    # 3. Create Modern Dark Flyout Window (Runs on Tkinter Main Thread)
+    flyout_window = ModernTrayFlyout()
+
+    # 4. Create Tray Icon
+    # Single click or right-click directly opens the sleek modern flyout
     initial_icon = make_tray_icon("idle")
     tray_icon = pystray.Icon(
         name="NexusStudio",
         icon=initial_icon,
         title="Nexus AI Lecture Studio",
-        menu=build_menu()
+        menu=pystray.Menu(
+            pystray.MenuItem("⚡ Open Nexus Studio", on_tray_action, default=True),
+            pystray.MenuItem("❌ Exit Nexus", lambda icon, it: exit_application())
+        )
     )
 
-    # 4. Start background icon updater
-    updater_thread = threading.Thread(target=status_icon_updater, args=(tray_icon,), daemon=True)
-    updater_thread.start()
+    # 5. Start background icon updater
+    threading.Thread(target=status_icon_updater, args=(tray_icon,), daemon=True).start()
 
-    # 5. Open browser automatically once on launch
+    # 6. Run tray icon in secondary thread so Tkinter mainloop can own main thread
+    threading.Thread(target=tray_icon.run, daemon=True).start()
+
+    # 7. Open browser once on initial launch
     def delayed_open():
         time.sleep(2.0)
         open_web_studio()
-        try:
-            tray_icon.notify("Nexus Studio is running in the background. Right-click this icon for quick actions.", "Nexus Studio Active")
-        except Exception:
-            pass
 
     threading.Thread(target=delayed_open, daemon=True).start()
 
-    # 6. Run tray icon main loop (blocks until exit)
-    tray_icon.run()
+    # 8. Start CustomTkinter Event Loop on main thread
+    flyout_window.mainloop()
 
 if __name__ == "__main__":
     main()

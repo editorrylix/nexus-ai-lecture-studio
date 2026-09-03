@@ -57,40 +57,34 @@ import Image from 'next/image'
 // ==========================================
 function ModernCursor() {
   const [pos, setPos] = useState({ x: -100, y: -100 })
-  const [isHovered, setIsHovered] = useState(false)
-  const [isInput, setIsInput] = useState(false)
+  const [isInteractive, setIsInteractive] = useState(false)
+  const [isText, setIsText] = useState(false)
   const [isClicking, setIsClicking] = useState(false)
-  const [hoverLabel, setHoverLabel] = useState('')
 
   useEffect(() => {
     const handleMove = (e: MouseEvent) => {
       setPos({ x: e.clientX, y: e.clientY })
       const target = e.target as HTMLElement
-      const inputEl = target?.closest('input, textarea')
-      if (inputEl) {
-        setIsInput(true)
-        setIsHovered(false)
-        setHoverLabel('')
-        return
-      } else {
-        setIsInput(false)
-      }
+      if (!target) return
 
-      const interactive = target?.closest('button, a, [role="button"], .interactive-element')
-      if (interactive) {
-        setIsHovered(true)
-        const label = interactive.getAttribute('data-cursor') || (interactive.tagName === 'BUTTON' ? 'ACTIVATE' : 'SELECT')
-        setHoverLabel(label)
+      // Text detection: inputs, textareas, or paragraph/sentence text elements
+      const isTextInput = target.closest('input, textarea')
+      const isParagraphText = target.closest('p, span, li, h1, h2, h3, h4, pre, code, [role="article"]') && !target.closest('button, a, [role="button"]')
+      
+      if (isTextInput || isParagraphText) {
+        setIsText(true)
+        setIsInteractive(false)
       } else {
-        setIsHovered(false)
-        setHoverLabel('')
+        setIsText(false)
+        const clickable = target.closest('button, a, [role="button"], .interactive-element')
+        setIsInteractive(!!clickable)
       }
     }
 
     const handleDown = () => setIsClicking(true)
     const handleUp = () => setIsClicking(false)
 
-    window.addEventListener('mousemove', handleMove)
+    window.addEventListener('mousemove', handleMove, { passive: true })
     window.addEventListener('mousedown', handleDown)
     window.addEventListener('mouseup', handleUp)
     return () => {
@@ -101,73 +95,32 @@ function ModernCursor() {
   }, [])
 
   return (
-    <div className="pointer-events-none fixed inset-0 z-[999999] overflow-hidden hidden md:block select-none mix-blend-difference">
-      {/* 1. Inverted Precision Stealth Arrowhead (Zero Circles) */}
-      {!isHovered && !isInput && (
-        <motion.div
-          className="fixed top-0 left-0 pointer-events-none"
-          animate={{
-            x: pos.x,
-            y: pos.y,
-            scale: isClicking ? 0.82 : 1,
-          }}
-          transition={{ type: "spring", stiffness: 850, damping: 45, mass: 0.08 }}
-        >
-          <svg width="22" height="22" viewBox="0 0 24 24" className="fill-white">
-            <path d="M2 2L20 11L12 13.5L9 21L2 2Z" />
-          </svg>
-        </motion.div>
-      )}
+    <div 
+      className="pointer-events-none fixed top-0 left-0 z-[999999] will-change-transform mix-blend-difference hidden md:block select-none"
+      style={{
+        transform: `translate3d(${pos.x}px, ${pos.y}px, 0)`,
+        transition: 'transform 0.04s linear'
+      }}
+    >
+      {/* State A: Inverted Text Beam (Unobstructed Sentence Reading) */}
+      <div 
+        className={`absolute -top-2 left-0 transition-opacity duration-150 ${
+          isText ? 'opacity-100' : 'opacity-0 pointer-events-none'
+        }`}
+      >
+        <div className="w-[1.5px] h-4 bg-white shadow-sm" />
+      </div>
 
-      {/* 2. Inverted Geometric Corner Reticle on Hover (Zero Circles) */}
-      {isHovered && !isInput && (
-        <motion.div
-          className="fixed top-0 left-0 pointer-events-none"
-          animate={{
-            x: pos.x - 18,
-            y: pos.y - 18,
-            scale: isClicking ? 0.85 : 1,
-          }}
-          transition={{ type: "spring", stiffness: 600, damping: 32, mass: 0.1 }}
-        >
-          <div className="w-9 h-9 relative">
-            {/* 4 Sharp Corner Brackets - pure white inverted */}
-            <div className="absolute top-0 left-0 w-2.5 h-2.5 border-t-2 border-l-2 border-white" />
-            <div className="absolute top-0 right-0 w-2.5 h-2.5 border-t-2 border-r-2 border-white" />
-            <div className="absolute bottom-0 left-0 w-2.5 h-2.5 border-b-2 border-l-2 border-white" />
-            <div className="absolute bottom-0 right-0 w-2.5 h-2.5 border-b-2 border-r-2 border-white" />
-            
-            {/* Center Precision Diamond Reticle */}
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="w-1.5 h-1.5 bg-white rotate-45" />
-            </div>
-
-            {/* Inverted Monospace Action Tag */}
-            {hoverLabel && (
-              <div className="absolute left-11 top-1 bg-white text-black px-1.5 py-0.5 text-[8px] font-mono font-bold tracking-widest uppercase flex items-center gap-1 shadow-md">
-                <span>{hoverLabel}</span>
-                <span className="text-[7px]">↗</span>
-              </div>
-            )}
-          </div>
-        </motion.div>
-      )}
-
-      {/* 3. Inverted Precision Serif I-Beam for Text Inputs (Zero Circles) */}
-      {isInput && (
-        <div
-          className="fixed top-0 left-0 pointer-events-none"
-          style={{
-            transform: `translate3d(${pos.x - 4}px, ${pos.y - 10}px, 0)`
-          }}
-        >
-          <div className="w-2 h-5 flex flex-col items-center justify-between">
-            <div className="w-2.5 h-[2px] bg-white" />
-            <div className="w-[2px] h-3.5 bg-white" />
-            <div className="w-2.5 h-[2px] bg-white" />
-          </div>
-        </div>
-      )}
+      {/* State B: Compact Stealth Arrow (Zero Circles, Zero Text Occlusion) */}
+      <div 
+        className={`absolute -top-0.5 -left-0.5 transition-all duration-150 ${
+          !isText ? 'opacity-100' : 'opacity-0 pointer-events-none'
+        } ${isClicking ? 'scale-90' : isInteractive ? 'scale-110' : 'scale-100'}`}
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" className="fill-white drop-shadow-sm">
+          <path d="M2 2L18 10L11 12L8.5 19L2 2Z" />
+        </svg>
+      </div>
     </div>
   )
 }
