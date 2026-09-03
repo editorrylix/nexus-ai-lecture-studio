@@ -47,7 +47,10 @@ import {
   Pause,
   Command,
   Sparkles,
-  CornerDownLeft
+  CornerDownLeft,
+  Share2,
+  PanelLeft,
+  PanelLeftClose
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Image from 'next/image'
@@ -276,6 +279,11 @@ export default function Dashboard() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isUploadingAudio, setIsUploadingAudio] = useState(false)
 
+  // Responsive Workspace & Live Captions State
+  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [showExportMenu, setShowExportMenu] = useState(false)
+  const [liveTranscript, setLiveTranscript] = useState('')
+
   const showToast = (text: string, type: 'success' | 'error' | 'info' = 'info') => {
     setToastMessage({ type, text })
     setTimeout(() => setToastMessage(null), 3000)
@@ -349,6 +357,9 @@ export default function Dashboard() {
           setIsProcessingAI(data.isProcessing)
           setRecordingSeconds(data.elapsed || 0)
           setVuLevel(data.vuLevel || 0)
+          if (data.liveTranscript) {
+            setLiveTranscript(data.liveTranscript)
+          }
         }
       }
     } catch {
@@ -689,15 +700,16 @@ export default function Dashboard() {
       <div className="flex flex-1 overflow-hidden z-10">
         
         {/* --- SLEEK APPLE GLASS SIDEBAR --- */}
-        <aside className="w-80 flex-shrink-0 bg-[#0A0C11]/80 backdrop-blur-3xl border-r border-white/[0.08] flex flex-col z-20">
+        <aside className={`${sidebarOpen ? 'w-72 lg:w-80' : 'w-0 border-r-0'} transition-all duration-300 overflow-hidden flex-shrink-0 bg-[#0A0C11]/80 backdrop-blur-3xl border-r border-white/[0.08] flex flex-col z-20`}>
           
           {/* Brand Header */}
-          <div className="px-5 py-4 border-b border-white/[0.06] flex items-center justify-between">
+          <div className="px-5 py-4 border-b border-white/[0.06] flex items-center justify-between min-w-[288px]">
             <div className="flex items-center gap-2.5">
               <div className="w-7 h-7 rounded-xl overflow-hidden p-[1px] bg-gradient-to-tr from-white/20 to-white/5 border border-white/[0.1] flex items-center justify-center shadow-sm">
                 <Image src="/nexus-logo.svg" alt="Nexus" width={20} height={20} priority />
               </div>
               <span className="font-semibold text-sm tracking-tight text-white/90">Nexus</span>
+              <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-white/[0.06] text-zinc-400 border border-white/[0.08]">LOCAL ASR</span>
             </div>
 
             <div className="flex items-center gap-1">
@@ -720,6 +732,14 @@ export default function Dashboard() {
                 className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/[0.06] active:scale-95 transition-all"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-white' : ''}`} />
+              </button>
+
+              <button 
+                onClick={() => setSidebarOpen(false)}
+                title="Collapse sidebar (gain screen space)"
+                className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/[0.06] active:scale-95 transition-all"
+              >
+                <PanelLeftClose className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>
@@ -947,18 +967,28 @@ export default function Dashboard() {
         <main className="flex-1 flex flex-col overflow-hidden bg-[#07080B] relative">
           
           {/* --- FLOATING APPLE FROSTED GLASS NAVIGATION BAR --- */}
-          <header className="sticky top-0 z-30 px-8 py-3.5 border-b border-white/[0.06] bg-[#07080B]/60 backdrop-blur-2xl flex items-center justify-between shadow-[0_4px_30px_rgba(0,0,0,0.3)]">
+          <header className="sticky top-0 z-30 px-4 lg:px-6 py-2.5 border-b border-white/[0.06] bg-[#07080B]/70 backdrop-blur-2xl flex items-center justify-between gap-2 shadow-[0_4px_30px_rgba(0,0,0,0.3)]">
             
-            {/* Left: Record Drawer Button & Quick Actions */}
-            <div className="flex items-center gap-3">
+            {/* Left: Sidebar Toggle, Record & Command Palette */}
+            <div className="flex items-center gap-2 shrink-0">
+              {!sidebarOpen && (
+                <button 
+                  onClick={() => setSidebarOpen(true)}
+                  title="Expand sidebar"
+                  className="p-1.5 rounded-xl text-zinc-400 hover:text-white hover:bg-white/[0.06] transition-all active:scale-95"
+                >
+                  <PanelLeft className="w-4 h-4" />
+                </button>
+              )}
+
               <button 
                 onClick={() => {
                   setShowStudio(!showStudio)
                   if (!showStudio) scanProcesses()
                 }}
-                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-medium transition-all active:scale-[0.97] border ${
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-medium transition-all active:scale-[0.97] border ${
                   isRecording 
-                    ? 'bg-red-500/10 border-red-500/30 text-red-300 animate-pulse' 
+                    ? 'bg-red-500/15 border-red-500/30 text-red-300 animate-pulse' 
                     : showStudio
                     ? 'bg-white text-black border-white shadow-md'
                     : 'bg-white/[0.06] hover:bg-white/[0.1] text-zinc-200 border-white/[0.08]'
@@ -967,12 +997,12 @@ export default function Dashboard() {
                 {isRecording ? (
                   <>
                     <div className="w-2 h-2 rounded-full bg-red-500 animate-ping"></div>
-                    <span>Recording ({Math.floor(recordingSeconds / 60)}:{(recordingSeconds % 60).toString().padStart(2, '0')})</span>
+                    <span className="font-mono font-medium">{Math.floor(recordingSeconds / 60)}:{(recordingSeconds % 60).toString().padStart(2, '0')}</span>
                   </>
                 ) : (
                   <>
                     <Mic className="w-3.5 h-3.5" />
-                    <span>{showStudio ? "Close Studio" : "Record"}</span>
+                    <span>{showStudio ? "Close" : "Record"}</span>
                     <ChevronDown className={`w-3 h-3 transition-transform ${showStudio ? 'rotate-180' : ''}`} />
                   </>
                 )}
@@ -981,25 +1011,16 @@ export default function Dashboard() {
               {/* Quick Spotlight Trigger Pill */}
               <button 
                 onClick={() => setShowCommandPalette(true)}
-                className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/[0.03] hover:bg-white/[0.07] border border-white/[0.07] text-xs text-zinc-400 hover:text-white transition-all active:scale-95"
+                title="Command Palette (⌘K)"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-white/[0.03] hover:bg-white/[0.07] border border-white/[0.07] text-xs text-zinc-400 hover:text-white transition-all active:scale-95"
               >
                 <Search className="w-3.5 h-3.5" />
-                <span className="text-[11px]">Command Palette</span>
-                <kbd className="px-1.5 py-0.5 rounded bg-white/[0.08] border border-white/[0.1] text-[10px] font-mono text-zinc-300">⌘K</kbd>
+                <kbd className="hidden sm:inline-block px-1 py-0.2 rounded bg-white/[0.08] text-[10px] font-mono text-zinc-300">⌘K</kbd>
               </button>
-
-              {/* Hybrid Engine Pill */}
-              <div 
-                title="Dual Engine: Gemini 3.6 Cloud Turbo with Faster-Whisper Local Offline Fallback"
-                className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/[0.08] border border-emerald-500/20 text-[10px] text-emerald-300"
-              >
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                <span className="font-mono tracking-tight">HYBRID ENGINE: GEMINI + WHISPER</span>
-              </div>
 
               {/* Dynamic VU Audio Waveform */}
               {isRecording && (
-                <div className="flex items-center gap-1.5 px-3 py-1 bg-white/[0.04] border border-white/[0.08] rounded-full">
+                <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 bg-white/[0.04] border border-white/[0.08] rounded-xl">
                   <div className="flex items-center gap-0.5 h-3">
                     {[0.3, 0.7, 1.0, 0.5, 0.8, 0.4].map((scale, i) => (
                       <motion.div
@@ -1010,21 +1031,21 @@ export default function Dashboard() {
                       />
                     ))}
                   </div>
-                  <span className="text-[10px] text-zinc-400 ml-1">{selectedAppName}</span>
+                  <span className="text-[10px] text-zinc-400 font-mono truncate max-w-[80px]">{selectedAppName}</span>
                 </div>
               )}
 
               {isProcessingAI && (
-                <div className="flex items-center gap-2 px-3 py-1 bg-white/[0.04] border border-white/[0.08] rounded-full text-xs text-zinc-300">
+                <div className="flex items-center gap-1.5 px-2.5 py-1 bg-white/[0.04] border border-white/[0.08] rounded-xl text-xs text-zinc-300">
                   <RefreshCw className="w-3 h-3 animate-spin text-white" />
-                  <span>Synthesizing notes...</span>
+                  <span className="hidden sm:inline text-[11px]">Synthesizing notes...</span>
                 </div>
               )}
             </div>
 
             {/* Middle: Apple Segmented Pill */}
             {selectedSession && (
-              <div className="flex p-1 bg-white/[0.04] border border-white/[0.08] rounded-2xl relative shadow-inner">
+              <div className="flex p-0.5 bg-white/[0.04] border border-white/[0.08] rounded-xl overflow-x-auto shrink-0 shadow-inner">
                 {[
                   { id: 'summary', icon: Layout, label: 'Summary' },
                   { id: 'flashcards', icon: Layers, label: 'Flashcards' },
@@ -1037,18 +1058,18 @@ export default function Dashboard() {
                     <button
                       key={tab.id}
                       onClick={() => setActiveTab(tab.id as any)}
-                      className={`relative flex items-center gap-1.5 px-3.5 py-1 text-xs font-medium rounded-xl transition-colors z-10 ${
+                      className={`relative flex items-center gap-1.5 px-2.5 lg:px-3 py-1 text-xs font-medium rounded-lg transition-colors z-10 whitespace-nowrap ${
                         isActive ? 'text-white font-semibold' : 'text-zinc-400 hover:text-zinc-200'
                       }`}
                     >
                       {isActive && (
                         <motion.div 
                           layoutId="activeTabPill"
-                          className="absolute inset-0 bg-white/[0.12] border border-white/[0.14] rounded-xl shadow-sm"
+                          className="absolute inset-0 bg-white/[0.12] border border-white/[0.14] rounded-lg shadow-sm"
                           transition={{ type: "spring", stiffness: 400, damping: 30 }}
                         />
                       )}
-                      <tab.icon className="w-3.5 h-3.5 relative z-10" />
+                      <tab.icon className="w-3.5 h-3.5 relative z-10 shrink-0" />
                       <span className="relative z-10">{tab.label}</span>
                     </button>
                   )
@@ -1056,39 +1077,82 @@ export default function Dashboard() {
               </div>
             )}
 
-            {/* Right: Actions */}
+            {/* Right: Consolidated Apple-style Export Dropdown */}
             {selectedSession && (
-              <div className="flex items-center gap-2">
+              <div className="relative shrink-0 flex items-center gap-2">
                 <button 
-                  onClick={handleExportMarkdown}
-                  title="Export notes as Markdown for Obsidian / Notion"
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-xs font-medium text-zinc-300 transition-all active:scale-95"
+                  onClick={() => setShowExportMenu(!showExportMenu)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.1] text-xs font-medium text-white transition-all active:scale-95 shadow-sm"
                 >
-                  <FileDown className="w-3.5 h-3.5 text-zinc-400" />
-                  <span>Markdown</span>
+                  <Share2 className="w-3.5 h-3.5 text-zinc-300" />
+                  <span>Export</span>
+                  <ChevronDown className={`w-3 h-3 text-zinc-400 transition-transform ${showExportMenu ? 'rotate-180' : ''}`} />
                 </button>
 
-                <button 
-                  onClick={handleCopySummary}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-xs font-medium text-zinc-300 transition-all active:scale-95"
-                >
-                  {copiedText ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-zinc-400" />}
-                  <span>{copiedText ? 'Copied' : 'Copy'}</span>
-                </button>
-
-                {selectedSession.flashcards_json?.anki_url && (
-                  <a 
-                    href={selectedSession.flashcards_json.anki_url} 
-                    download
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white text-black font-medium text-xs shadow-md shadow-white/10 active:scale-95 transition-all"
+                {showExportMenu && (
+                  <div 
+                    className="absolute right-0 top-full mt-2 w-56 py-1.5 bg-[#0D1018]/95 backdrop-blur-2xl border border-white/[0.14] rounded-xl shadow-2xl z-50 flex flex-col divide-y divide-white/[0.04]"
+                    onMouseLeave={() => setShowExportMenu(false)}
                   >
-                    <Download className="w-3.5 h-3.5 text-black" />
-                    <span>Anki</span>
-                  </a>
+                    <button 
+                      onClick={() => { handleExportMarkdown(); setShowExportMenu(false) }}
+                      className="flex items-center gap-2.5 px-3 py-2 text-xs text-zinc-200 hover:bg-white/[0.08] text-left transition-colors"
+                    >
+                      <FileDown className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+                      <div>
+                        <div className="font-medium text-white">Obsidian Markdown</div>
+                        <div className="text-[10px] text-zinc-500">Download formatted .md note</div>
+                      </div>
+                    </button>
+
+                    {selectedSession.flashcards_json?.anki_url && (
+                      <a 
+                        href={selectedSession.flashcards_json.anki_url} 
+                        download
+                        onClick={() => setShowExportMenu(false)}
+                        className="flex items-center gap-2.5 px-3 py-2 text-xs text-zinc-200 hover:bg-white/[0.08] text-left transition-colors"
+                      >
+                        <Download className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                        <div>
+                          <div className="font-medium text-white">Anki Flashcard Deck</div>
+                          <div className="text-[10px] text-zinc-500">Download .apkg flashcards</div>
+                        </div>
+                      </a>
+                    )}
+
+                    <button 
+                      onClick={() => { handleCopySummary(); setShowExportMenu(false) }}
+                      className="flex items-center gap-2.5 px-3 py-2 text-xs text-zinc-200 hover:bg-white/[0.08] text-left transition-colors"
+                    >
+                      <Copy className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                      <div>
+                        <div className="font-medium text-white">{copiedText ? 'Copied to Clipboard!' : 'Copy Summary'}</div>
+                        <div className="text-[10px] text-zinc-500">Copy plain text summary</div>
+                      </div>
+                    </button>
+                  </div>
                 )}
               </div>
             )}
           </header>
+
+          {/* --- LIVE LOCAL SPEECH CAPTIONS BANNER --- */}
+          {isRecording && (
+            <div className="px-6 py-2 bg-gradient-to-r from-red-500/[0.08] via-red-500/[0.04] to-transparent border-b border-red-500/20 flex items-center justify-between gap-4 backdrop-blur-md">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <span className="w-2 h-2 rounded-full bg-red-500 animate-ping flex-shrink-0" />
+                <span className="text-[10px] font-mono uppercase tracking-wider text-red-400 font-bold flex-shrink-0">
+                  Live Speech:
+                </span>
+                <span className="text-xs text-zinc-200 truncate italic">
+                  {liveTranscript || "Listening for speech via local Faster-Whisper model..."}
+                </span>
+              </div>
+              <span className="text-[10px] font-mono text-zinc-500 hidden sm:inline-block flex-shrink-0">
+                100% Local On-Device Whisper
+              </span>
+            </div>
+          )}
 
           {/* --- IN-BROWSER RECORDING STUDIO DRAWER --- */}
           <AnimatePresence>

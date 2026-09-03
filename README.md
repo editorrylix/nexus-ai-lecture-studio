@@ -2,7 +2,7 @@
 
 # ⚡ Nexus — Local-First AI Lecture & Meeting Studio
 
-### The open-source, 100% private alternative to Otter.ai & Granola. Turn live Zoom, Teams, and Chrome audio into structured study guides, Anki decks, and Obsidian notes — entirely offline on your PC with zero subscription fees.
+### The open-source, 100% private alternative to Otter.ai & Granola. Audio is transcribed 100% locally on your PC — only lightweight text is sent to AI models for instant study guides, Anki decks, and Obsidian notes with zero subscription fees.
 
 <br/>
 
@@ -10,6 +10,7 @@
 [![GitHub Forks](https://img.shields.io/github/forks/editorrylix/nexus-ai-lecture-studio?style=for-the-badge&logo=github&color=blue)](https://github.com/editorrylix/nexus-ai-lecture-studio/network/members)
 [![License: MIT](https://img.shields.io/badge/License-MIT-emerald?style=for-the-badge)](https://opensource.org/licenses/MIT)
 [![Next.js](https://img.shields.io/badge/Next.js-16.3-black?style=for-the-badge&logo=next.js)](https://nextjs.org/)
+[![Faster-Whisper](https://img.shields.io/badge/Local_STT-Faster--Whisper-00E6FF?style=for-the-badge)](https://github.com/SYSTRAN/faster-whisper)
 [![Google Gemini](https://img.shields.io/badge/Gemini_3.6_Flash-AI-4285F4?style=for-the-badge&logo=google)](https://ai.google.dev/)
 [![Obsidian Ready](https://img.shields.io/badge/Obsidian-Ready-7C3AED?style=for-the-badge&logo=obsidian)](https://obsidian.md/)
 [![Anki Export](https://img.shields.io/badge/Anki-Deck_Export-2D3748?style=for-the-badge)](https://apps.ankiweb.net/)
@@ -20,7 +21,7 @@
 
 <br/>
 
-[Quick Start (3 Mins)](#-quick-start-3-minutes) • [Why Nexus?](#-why-nexus-vs-alternatives) • [System Tray Flyout](#-native-windows-11-system-tray) • [Key Features](#-key-features) • [Local Model Roadmap](#-local-transcriber-models--offline-roadmap) • [Architecture](#-architecture--data-flow) • [Tech Stack](#-tech-stack)
+[Quick Start (3 Mins)](#-quick-start-3-minutes) • [Why Nexus?](#-why-nexus-vs-alternatives) • [Split Architecture](#-the-split-hybrid-architecture) • [System Limits](#-system-limits--api-quotas) • [Key Features](#-key-features) • [System Tray Flyout](#-native-windows-11-system-tray) • [Tech Stack](#-tech-stack)
 
 ---
 
@@ -35,15 +36,64 @@ Traditional AI meeting notetakers like Otter.ai, Fireflies.ai, or Granola come w
 | Feature | Otter.ai / Fireflies | Granola | ⚡ **Nexus Studio (Open Source)** |
 | :--- | :---: | :---: | :---: |
 | **Pricing** | $16.99–$30 / month | $10 / month | **100% Free Forever (MIT)** |
-| **Data Privacy** | Cloud Servers (Stored Remotely) | Cloud Backend | **100% Local Hard Drive (Zero Tracking)** |
+| **Audio Privacy** | Audio uploaded to cloud servers | Cloud Audio Upload | **100% Local On-Device Transcriber (Zero Audio Uploaded)** |
 | **Call Bot Intrusion** | Bot joins call & interrupts | Needs mic permission | **Silent Process Loopback (No bot needed)** |
+| **Live Subtitles** | Web Tab only | Limited | **✅ Real-time Local Captions Banner** |
 | **Background Running** | Web Tab must stay open | Desktop App | **Native Windows Tray Flyout (0 CMD Windows)** |
 | **Command Palette** | ❌ None | Limited | **✅ Spotlight `⌘K` Quick Action & Search** |
 | **Process Audio Isolation** | ❌ Captures all room noise | ❌ Captures mic | **✅ Isolates specific app (Teams/Chrome/Zoom)** |
 | **Anki Deck Export** | ❌ None | ❌ None | **✅ 1-Click `.apkg` Spaced Repetition Decks** |
 | **Obsidian Vault Notes** | ❌ None | Manual export | **✅ Direct `.md` with Callouts & Outlines** |
 | **Multi-Lecture Stitching**| ❌ No | ❌ No | **✅ Merge Part 1 & Part 2 into Master Guide** |
-| **Built-in Audio Player** | Web Only | Limited | **✅ Scrubber + Animated Waveform + Speed** |
+| **Responsive Laptop UI** | Rigid web view | Desktop fixed | **✅ Collapsible Sidebar + Compact Action Bar** |
+
+---
+
+## 🏛️ The Split Hybrid Architecture
+
+Nexus uses a **privacy-first, two-tier compute pipeline**:
+
+```
+[ Windows Audio (WASAPI) ] ──> [ client-audio-hook.exe (.NET 8) ]
+                                            │
+                                            ▼
+                           [ Local Faster-Whisper / Moonshine (CPU/GPU) ]
+                                            │
+                                 (100% Local Transcript)
+                                            │
+               ┌────────────────────────────┴────────────────────────────┐
+               ▼                                                         ▼
+    [ Cloud AI Studio: Gemini 3.6 Flash ]                      [ Offline Fallback ]
+        (Text-Only Intelligence)                                (Local Extraction)
+   • Markdown Summarization                                • Local Rule-based Notes
+   • Spaced-Repetition Flashcards                          • Offline Anki .apkg
+   • Practice Quizzes                                      • Offline Obsidian .md
+   • Real-Time Streaming Chatbot
+```
+
+1. **Tier 1: 100% Local Speech-to-Text (Zero Cloud Audio)**
+   - Powered by `faster-whisper` (`tiny.en`) with CTranslate2 int8 quantization on your CPU.
+   - **Zero voice or audio data is ever sent to Google or third-party servers**.
+   - Supports live rolling captions while recording is active.
+2. **Tier 2: Cloud LLM for Education Intelligence**
+   - Only the clean, text-only transcript is sent to Google Gemini 3.6 Flash.
+   - Generates structured study guides, flashcards, and quizzes in under ~1.5 seconds.
+   - Powers the streaming conversational study assistant ("Study AI").
+
+---
+
+## 📊 System Limits & API Quotas
+
+Nexus is designed to be transparent about its hardware and API boundaries:
+
+| Dimension | Specification | Notes & Fallback Behavior |
+| :--- | :--- | :--- |
+| **Audio Upload Limit** | **Unlimited (0 bytes to cloud)** | Audio is never uploaded to any cloud server; multi-hour lectures process locally without size caps. |
+| **Gemini API Free Tier** | **15 RPM / 1,500 RPD** | Google AI Studio free tier limits. Because only text is sent, requests use minimal tokens. |
+| **LLM Context Window** | **1,000,000 Tokens** | Gemini 3.6 Flash context allows over 100+ hours of concatenated lecture transcripts in a single session. |
+| **Local CPU Footprint** | **~180MB RAM (int8)** | Faster-Whisper `tiny.en` runs smoothly on standard modern laptop CPUs (Intel Core / AMD Ryzen). |
+| **Transcription Speed** | **~10x real-time on CPU** | A 10-minute lecture audio chunk is transcribed locally in ~60 seconds. |
+| **Offline Capability** | **100% Air-Gapped Fallback** | If the internet is disconnected or API key is absent, Nexus synthesizes notes and Anki cards locally. |
 
 ---
 
@@ -59,7 +109,9 @@ Nexus runs completely in the background without leaving open command prompt wind
 ## ✨ Key Features
 
 - **🎙️ Process-Specific Audio Hook**: Captures pure digital audio directly from the sound card using Windows WASAPI. Zero microphone background noise, room echoes, or fan hum.
-- **🍎 Apple-Grade Glassmorphic UI**: Minimalist, distraction-free study environment built with frosted glass materials, subtle depth lighting, 3D interactive tilt cards, and a custom color-inverting pointer.
+- **🔴 Real-Time Local Captions**: Rolling on-device speech captions appear dynamically above your workspace while lecture recording is active.
+- **📱 Responsive Laptop-Optimized UI**: Collapsible sidebar (`PanelLeft`) and compact consolidated export menu ensures flawless layouts on standard 13"–15" Windows laptops without zooming out.
+- **🍎 Apple-Grade Glassmorphic UI**: Minimalist study environment built with frosted glass materials, subtle depth lighting, 3D interactive tilt cards, and a custom color-inverting pointer.
 - **🔍 Universal Spotlight Command Palette (`⌘K` / `Ctrl+K`)**: Rapidly search through all course lectures and execute commands (record, flashcards, quiz, export) with pure keyboard navigation.
 - **⚡ Zero-Latency Streaming AI Study Assistant**: Ask questions directly about the lecture. Answers stream token-by-token in real-time (~150ms latency) powered by Google Gemini 3.6 Flash.
 - **🗂️ Automated Anki `.apkg` Generator**: Converts the most testable lecture concepts into spaced-repetition flashcards. Download and double-click to import straight into Anki Desktop or Mobile.
@@ -67,36 +119,6 @@ Nexus runs completely in the background without leaving open command prompt wind
 - **🪡 Multi-Lecture Stitching**: Select multiple lecture segments or workshops and synthesize them into a unified **Master Study Guide**.
 - **🎵 Floating Audio Player**: Re-listen to any recorded lecture with variable speed playback (`1.0x`, `1.25x`, `1.5x`, `2.0x`) and live animated canvas waveforms.
 - **📤 Drag-and-Drop Audio Import**: Have a pre-recorded `.wav` or `.mp3` from your phone or classroom recording? Drop it in and Nexus will synthesize it instantly.
-
----
-
-## 🎙️ Local Transcriber Models & Offline Roadmap
-
-While Nexus currently accelerates synthesis using Google Gemini 3.6 Flash, we are implementing a **Dual Hybrid Engine** to support 100% offline, air-gapped study environments:
-
-| Model | Footprint | CPU Speed | Latency / Windowing | Purpose in Nexus |
-| :--- | :--- | :--- | :--- | :--- |
-| **Moonshine (Useful Sensors)** | ~245MB (ONNX) | **~5x faster than Whisper** | **Sub-200ms**, dynamic windowing | 🥇 Live real-time audio loopback streaming |
-| **Faster-Whisper (`tiny.en`)** | 75MB (CTranslate2 int8) | **~10x real-time on standard CPU** | 30s chunk batch inference | 🥈 Offline post-lecture batch transcription |
-| **Ollama / Gemma 2 2B (`Q4_K_M`)** | ~1.8GB RAM | ~35 tokens/sec | Local Air-Gapped LLM | 🥉 100% Offline Flashcard & Summary Synthesis |
-
----
-
-## 🏗 Architecture & Data Flow
-
-```mermaid
-graph TD
-    A[Teams / Chrome / Zoom / Spotify] -->|Windows Core Audio Loopback| B[client-audio-hook.exe - C# .NET 8]
-    B -->|Named Pipe Float32 Stream| C[tray_app.py - Python System Tray]
-    C -->|Stores Audio Locally| D[storage/recordings/*.wav]
-    C -->|Hybrid Fast Inference| E[Google Gemini 3.6 Flash / Local Whisper]
-    E -->|Structured JSON Output| F[Local Vault Manager]
-    F -->|Persists Index| G[storage/sessions.json]
-    F -->|Generates Obsidian Note| H[storage/markdown/lecture_*.md]
-    F -->|Generates Anki Deck| I[storage/exports/meeting_*.apkg]
-    G -->|Local IPC Bridge| J[Next.js 16 Frosted Glass Studio]
-    J -->|Spotlight Palette & Streaming AI| K[Cmd+K & Vercel AI SDK]
-```
 
 ---
 

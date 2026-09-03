@@ -38,7 +38,8 @@ state = {
     "targetName": "",
     "currentWav": None,
     "lastError": None,
-    "lastSavedSession": None
+    "lastSavedSession": None,
+    "liveTranscript": ""
 }
 
 csharp_process = None
@@ -151,6 +152,27 @@ def recording_loop():
             pass
         state["vuLevel"] = 0.0
 
+def live_transcription_worker():
+    global state
+    try:
+        import local_stt
+    except Exception:
+        return
+
+    while state["isRecording"]:
+        time.sleep(5.0)
+        if not state["isRecording"] or not state.get("currentWav"):
+            break
+        wav_path = state["currentWav"]
+        if os.path.exists(wav_path) and os.path.getsize(wav_path) > 90000:
+            try:
+                res = local_stt.transcribe_audio_file(wav_path, model_size="tiny.en")
+                text = res.get("text", "").strip()
+                if text:
+                    state["liveTranscript"] = text
+            except Exception:
+                pass
+
 def start_capture(pid: int, app_name: str = ""):
     global state, csharp_process, recording_thread
     if state["isRecording"]:
@@ -160,6 +182,7 @@ def start_capture(pid: int, app_name: str = ""):
     state["lastError"] = None
     state["targetPid"] = pid
     state["targetName"] = app_name or f"PID {pid}"
+    state["liveTranscript"] = ""
 
     storage_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../storage/recordings'))
     os.makedirs(storage_dir, exist_ok=True)
@@ -181,6 +204,10 @@ def start_capture(pid: int, app_name: str = ""):
 
     recording_thread = threading.Thread(target=recording_loop, daemon=True)
     recording_thread.start()
+
+    # Launch live transcription worker
+    threading.Thread(target=live_transcription_worker, daemon=True).start()
+
     return True, "Recording started"
 
 def stop_capture():
@@ -251,7 +278,8 @@ class DaemonHandler(BaseHTTPRequestHandler):
                 "targetPid": state["targetPid"],
                 "targetName": state["targetName"],
                 "lastError": state["lastError"],
-                "lastSaved": state["lastSavedSession"]
+                "lastSaved": state["lastSavedSession"],
+                "liveTranscript": state.get("liveTranscript", "")
             })
         else:
             self._send_json({"status": "Nexus Audio Daemon Online", "version": "2.0"})

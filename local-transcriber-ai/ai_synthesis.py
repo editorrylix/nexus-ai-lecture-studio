@@ -107,48 +107,60 @@ def process_audio(audio_path: str) -> MeetingSynthesis:
     if not os.path.exists(audio_path) or os.path.getsize(audio_path) < 2048:
         raise ValueError(f"Recording file '{audio_path}' is virtually empty ({os.path.getsize(audio_path) if os.path.exists(audio_path) else 0} bytes). Make sure the selected application was playing audible sound during the recording.")
 
+    # 1. Always Transcribe 100% Locally (Zero Audio Uploaded to Cloud)
+    import local_stt
+    print(f"[LOCAL STT] Transcribing {audio_path} locally on CPU via Faster-Whisper...")
+    stt_res = local_stt.transcribe_audio_file(audio_path, model_size="tiny.en")
+    transcript = stt_res.get("text", "").strip()
+    
+    if not transcript:
+        print("[LOCAL STT] No audible speech detected in audio file.")
+        transcript = "No audible speech was detected in this recording."
+
+    print(f"[LOCAL STT] Local transcript generated ({len(transcript)} chars). Zero audio sent to cloud.")
+
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
-        print("[AI] GEMINI_API_KEY not set. Using 100% offline local Faster-Whisper engine.")
+        print("[AI] GEMINI_API_KEY not set. Using 100% offline local notes synthesis.")
         return process_audio_locally(audio_path)
     
+    # 2. Use Gemini API ONLY for Text Intelligence (Summary, Outline, Flashcards, Glossary)
     try:
         client = genai.Client(api_key=api_key)
-        print(f"Uploading {audio_path} ({os.path.getsize(audio_path) / (1024*1024):.2f} MB) to Google Gemini API...")
-        uploaded_file = client.files.upload(file=audio_path)
-        
-        print("Sending audio to Gemini 3.6 Flash for transcription and synthesis...")
-        prompt = """
-        You are an expert AI assistant for education and meeting analysis. 
-        Listen to the following meeting/lecture audio recording and generate:
-        1. A full text transcript of what was said.
-        2. A high-level markdown summary.
-        3. A list of action items or key takeaways.
-        4. A structured course outline breaking the meeting down into logical sections.
-        5. A glossary of important technical or specific terms mentioned.
-        6. A set of study flashcards capturing the most important concepts.
+        print("Sending clean transcript to Gemini 3.6 Flash for education synthesis & study tools...")
+        prompt = f"""
+        You are an expert AI tutor and lecture study synthesizer.
+        Below is the verbatim transcript of a recorded meeting/lecture:
+
+        ---
+        {transcript}
+        ---
+
+        Generate a comprehensive, structured study package based on this lecture:
+        1. raw_transcript: Use the exact transcript provided above.
+        2. summary: A structured, high-level executive summary in Markdown format with key sections.
+        3. action_items: Practical takeaways, study recommendations, or exam preparation points.
+        4. course_outline: Logical course sections with clear topic titles and sub-bullet points.
+        5. glossary: Essential technical terms or domain concepts with concise definitions.
+        6. flashcards: High-yield Question and Answer flashcard pairs for spaced repetition study.
         """
         
-        try:
-            response = client.models.generate_content(
-                model='gemini-3.6-flash',
-                contents=[uploaded_file, prompt],
-                config={
-                    'response_mime_type': 'application/json',
-                    'response_schema': MeetingSynthesis,
-                    'temperature': 0.2
-                }
-            )
-            print("Received synthesis from Gemini API.")
-            return response.parsed
-        finally:
-            try:
-                print("Cleaning up file from Gemini servers...")
-                client.files.delete(name=uploaded_file.name)
-            except Exception as e:
-                print(f"Failed to delete file from Gemini: {e}")
+        response = client.models.generate_content(
+            model='gemini-3.6-flash',
+            contents=prompt,
+            config={
+                'response_mime_type': 'application/json',
+                'response_schema': MeetingSynthesis,
+                'temperature': 0.2
+            }
+        )
+        print("[AI] Received structured synthesis from Gemini API successfully.")
+        parsed = response.parsed
+        # Ensure the transcript from local model is preserved
+        parsed.raw_transcript = transcript
+        return parsed
     except Exception as e:
-        print(f"[AI] Gemini API error or offline ({e}). Falling back to 100% offline Faster-Whisper engine.")
+        print(f"[AI] Gemini API text synthesis error or offline ({e}). Falling back to local synthesis.")
         return process_audio_locally(audio_path)
 
 def generate_anki_deck(synthesis: MeetingSynthesis, session_id: str) -> str:
