@@ -988,6 +988,15 @@ export default function Dashboard() {
                 <kbd className="px-1.5 py-0.5 rounded bg-white/[0.08] border border-white/[0.1] text-[10px] font-mono text-zinc-300">⌘K</kbd>
               </button>
 
+              {/* Hybrid Engine Pill */}
+              <div 
+                title="Dual Engine: Gemini 3.6 Cloud Turbo with Faster-Whisper Local Offline Fallback"
+                className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/[0.08] border border-emerald-500/20 text-[10px] text-emerald-300"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="font-mono tracking-tight">HYBRID ENGINE: GEMINI + WHISPER</span>
+              </div>
+
               {/* Dynamic VU Audio Waveform */}
               {isRecording && (
                 <div className="flex items-center gap-1.5 px-3 py-1 bg-white/[0.04] border border-white/[0.08] rounded-full">

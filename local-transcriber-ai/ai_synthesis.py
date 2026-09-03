@@ -44,48 +44,112 @@ def get_latest_audio() -> str:
         return None
     return max(list_of_files, key=os.path.getctime)
 
+def process_audio_locally(audio_path: str) -> MeetingSynthesis:
+    """Fallback offline processing using faster-whisper with CTranslate2."""
+    import local_stt
+    print(f"[OFFLINE] Transcribing {audio_path} with local Faster-Whisper model...")
+    stt_res = local_stt.transcribe_audio_file(audio_path, model_size="tiny.en")
+    transcript = stt_res.get("text", "").strip()
+    if not transcript:
+        transcript = "No audible speech was detected in this recording."
+        
+    sentences = [s.strip() for s in transcript.split('.') if len(s.strip()) > 8]
+    
+    summary = f"### Local Lecture Summary (Processed Offline)\n\n"
+    if sentences:
+        summary += f"This lecture covered: {sentences[0]}.\n\n"
+        for s in sentences[1:4]:
+            summary += f"- {s}.\n"
+    else:
+        summary += transcript
+        
+    action_items = [f"Review key point: {s[:70]}..." for s in sentences[:3]] if sentences else ["Review lecture recording."]
+    
+    flashcards = []
+    for i, s in enumerate(sentences[:5]):
+        words = s.split()
+        if len(words) >= 4:
+            flashcards.append(Flashcard(
+                front=f"What was explained regarding '{' '.join(words[:3])}...'?",
+                back=s
+            ))
+            
+    if not flashcards:
+        flashcards.append(Flashcard(front="Lecture Overview", back=transcript[:140]))
+        
+    glossary = []
+    words = transcript.split()
+    seen = set()
+    for w in words:
+        clean = w.strip('.,!?:;"()').capitalize()
+        if len(clean) > 4 and clean not in seen and clean.isalpha():
+            seen.add(clean)
+            glossary.append(GlossaryTerm(term=clean, definition="Key term identified in local audio transcript."))
+            if len(glossary) >= 4:
+                break
+                
+    course_outline = [
+        CourseSection(title="1. Introduction", bullet_points=sentences[:2] if sentences else [transcript[:60]]),
+        CourseSection(title="2. Core Content", bullet_points=sentences[2:5] if len(sentences) > 2 else ["Full discussion recorded."]),
+        CourseSection(title="3. Review & Summary", bullet_points=action_items)
+    ]
+    
+    return MeetingSynthesis(
+        raw_transcript=transcript,
+        summary=summary,
+        action_items=action_items,
+        flashcards=flashcards,
+        glossary=glossary,
+        course_outline=course_outline
+    )
+
 def process_audio(audio_path: str) -> MeetingSynthesis:
     if not os.path.exists(audio_path) or os.path.getsize(audio_path) < 2048:
         raise ValueError(f"Recording file '{audio_path}' is virtually empty ({os.path.getsize(audio_path) if os.path.exists(audio_path) else 0} bytes). Make sure the selected application was playing audible sound during the recording.")
 
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
-        raise ValueError("GEMINI_API_KEY is missing from your .env file! Please add GEMINI_API_KEY=<your_key> to local-transcriber-ai/.env.")
-    
-    client = genai.Client(api_key=api_key)
-    print(f"Uploading {audio_path} ({os.path.getsize(audio_path) / (1024*1024):.2f} MB) to Google Gemini API...")
-    uploaded_file = client.files.upload(file=audio_path)
-    
-    print("Sending audio to Gemini 3.6 Flash for transcription and synthesis...")
-    prompt = """
-    You are an expert AI assistant for education and meeting analysis. 
-    Listen to the following meeting/lecture audio recording and generate:
-    1. A full text transcript of what was said.
-    2. A high-level markdown summary.
-    3. A list of action items or key takeaways.
-    4. A structured course outline breaking the meeting down into logical sections.
-    5. A glossary of important technical or specific terms mentioned.
-    6. A set of study flashcards capturing the most important concepts.
-    """
+        print("[AI] GEMINI_API_KEY not set. Using 100% offline local Faster-Whisper engine.")
+        return process_audio_locally(audio_path)
     
     try:
-        response = client.models.generate_content(
-            model='gemini-3.6-flash',
-            contents=[uploaded_file, prompt],
-            config={
-                'response_mime_type': 'application/json',
-                'response_schema': MeetingSynthesis,
-                'temperature': 0.2
-            }
-        )
-        print("Received synthesis from Gemini API.")
-        return response.parsed
-    finally:
+        client = genai.Client(api_key=api_key)
+        print(f"Uploading {audio_path} ({os.path.getsize(audio_path) / (1024*1024):.2f} MB) to Google Gemini API...")
+        uploaded_file = client.files.upload(file=audio_path)
+        
+        print("Sending audio to Gemini 3.6 Flash for transcription and synthesis...")
+        prompt = """
+        You are an expert AI assistant for education and meeting analysis. 
+        Listen to the following meeting/lecture audio recording and generate:
+        1. A full text transcript of what was said.
+        2. A high-level markdown summary.
+        3. A list of action items or key takeaways.
+        4. A structured course outline breaking the meeting down into logical sections.
+        5. A glossary of important technical or specific terms mentioned.
+        6. A set of study flashcards capturing the most important concepts.
+        """
+        
         try:
-            print("Cleaning up file from Gemini servers...")
-            client.files.delete(name=uploaded_file.name)
-        except Exception as e:
-            print(f"Failed to delete file from Gemini: {e}")
+            response = client.models.generate_content(
+                model='gemini-3.6-flash',
+                contents=[uploaded_file, prompt],
+                config={
+                    'response_mime_type': 'application/json',
+                    'response_schema': MeetingSynthesis,
+                    'temperature': 0.2
+                }
+            )
+            print("Received synthesis from Gemini API.")
+            return response.parsed
+        finally:
+            try:
+                print("Cleaning up file from Gemini servers...")
+                client.files.delete(name=uploaded_file.name)
+            except Exception as e:
+                print(f"Failed to delete file from Gemini: {e}")
+    except Exception as e:
+        print(f"[AI] Gemini API error or offline ({e}). Falling back to 100% offline Faster-Whisper engine.")
+        return process_audio_locally(audio_path)
 
 def generate_anki_deck(synthesis: MeetingSynthesis, session_id: str) -> str:
     print("Generating Anki deck...")
