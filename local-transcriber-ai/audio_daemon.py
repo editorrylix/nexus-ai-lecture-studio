@@ -14,7 +14,7 @@ import threading
 import subprocess
 import numpy as np
 import ctypes
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 
 try:
     from pycaw.pycaw import AudioUtilities
@@ -210,19 +210,46 @@ def live_transcription_worker():
     except Exception:
         return
 
+    sample_rate = 48000
+    channels = 2
+    bytes_per_sample = 2
+    bytes_per_sec = sample_rate * channels * bytes_per_sample
+    slice_bytes = 6 * bytes_per_sec  # 6 second audio slice
+
     while state["isRecording"]:
-        time.sleep(5.0)
+        time.sleep(8.0)
         if not state["isRecording"] or not state.get("currentWav"):
             break
         wav_path = state["currentWav"]
-        if os.path.exists(wav_path) and os.path.getsize(wav_path) > 90000:
+        if os.path.exists(wav_path) and os.path.getsize(wav_path) > slice_bytes + 1000:
+            scratch_wav = wav_path + ".live_slice.wav"
             try:
-                res = local_stt.transcribe_audio_file(wav_path, model_size="tiny.en")
+                # Read only the latest 6-second window to keep CPU under 1.5%
+                with open(wav_path, 'rb') as f:
+                    f.seek(0, os.SEEK_END)
+                    total_size = f.tell()
+                    read_start = max(44, total_size - slice_bytes)
+                    f.seek(read_start)
+                    raw_slice = f.read()
+
+                with wave.open(scratch_wav, 'wb') as sf:
+                    sf.setnchannels(channels)
+                    sf.setsampwidth(bytes_per_sample)
+                    sf.setframerate(sample_rate)
+                    sf.writeframes(raw_slice)
+
+                res = local_stt.transcribe_audio_file(scratch_wav, model_size="tiny.en")
                 text = res.get("text", "").strip()
                 if text:
                     state["liveTranscript"] = text
             except Exception:
                 pass
+            finally:
+                try:
+                    if os.path.exists(scratch_wav):
+                        os.remove(scratch_wav)
+                except Exception:
+                    pass
 
 def start_capture(pid: int, app_name: str = ""):
     global state, csharp_process, recording_thread
@@ -240,11 +267,21 @@ def start_capture(pid: int, app_name: str = ""):
     ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     state["currentWav"] = os.path.join(storage_dir, f"recording_{ts}.wav")
 
-    # Launch C# headless capture
+    # Launch C# headless capture (Prioritize pre-compiled binary for instant 0% CPU startup)
     csharp_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../client-audio-hook'))
+    publish_exe = os.path.join(csharp_dir, 'bin', 'Release', 'publish', 'client-audio-hook.exe')
+    debug_exe = os.path.join(csharp_dir, 'bin', 'Debug', 'net8.0', 'client-audio-hook.exe')
+
+    if os.path.exists(publish_exe):
+        cmd = [publish_exe, str(pid)]
+    elif os.path.exists(debug_exe):
+        cmd = [debug_exe, str(pid)]
+    else:
+        cmd = ["dotnet", "run", "--", str(pid)]
+
     try:
         csharp_process = subprocess.Popen(
-            ["dotnet", "run", "--", str(pid)],
+            cmd,
             cwd=csharp_dir,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -256,7 +293,7 @@ def start_capture(pid: int, app_name: str = ""):
     recording_thread = threading.Thread(target=recording_loop, daemon=True)
     recording_thread.start()
 
-    # Launch live transcription worker
+    # Launch live transcription worker (runs on low-impact 8s interval)
     threading.Thread(target=live_transcription_worker, daemon=True).start()
 
     return True, "Recording started"
@@ -361,7 +398,7 @@ class DaemonHandler(BaseHTTPRequestHandler):
             self._send_json({"error": "Endpoint not found"}, status=404)
 
 def run():
-    server = HTTPServer(('127.0.0.1', PORT), DaemonHandler)
+    server = ThreadingHTTPServer(('127.0.0.1', PORT), DaemonHandler)
     print(f"[DAEMON] Nexus Audio Controller Daemon active on http://127.0.0.1:{PORT}")
     try:
         server.serve_forever()

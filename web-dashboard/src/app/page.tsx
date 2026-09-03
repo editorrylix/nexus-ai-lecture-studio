@@ -67,25 +67,45 @@ function ModernCursor() {
   const [clickCount, setClickCount] = useState(0)
 
   useEffect(() => {
+    let animFrame: number
+    let lastTarget: HTMLElement | null = null
+
     const handleMove = (e: MouseEvent) => {
       setPos({ x: e.clientX, y: e.clientY })
       if (!isVisible) setIsVisible(true)
 
       const target = e.target as HTMLElement
-      if (!target) return
+      if (!target || target === lastTarget) return
+      lastTarget = target
 
-      // Text detection: inputs, textareas, or paragraph/sentence text elements
-      const isTextInput = target.closest('input, textarea')
-      const isParagraphText = target.closest('p, span, li, h1, h2, h3, h4, pre, code, [role="article"]') && !target.closest('button, a, [role="button"]')
-      
-      if (isTextInput || isParagraphText) {
-        setIsText(true)
-        setIsInteractive(false)
-      } else {
+      cancelAnimationFrame(animFrame)
+      animFrame = requestAnimationFrame(() => {
+        const tag = target.tagName
+        const isTextInput = tag === 'INPUT' || tag === 'TEXTAREA' || target.isContentEditable
+        
+        if (isTextInput) {
+          setIsText(true)
+          setIsInteractive(false)
+          return
+        }
+
+        const isClickable = tag === 'BUTTON' || tag === 'A' || target.getAttribute('role') === 'button' || !!target.closest('button, a, [role="button"]')
+        if (isClickable) {
+          setIsText(false)
+          setIsInteractive(true)
+          return
+        }
+
+        const isParagraph = tag === 'P' || tag === 'SPAN' || tag === 'LI' || tag === 'H1' || tag === 'H2' || tag === 'H3' || tag === 'CODE' || tag === 'PRE'
+        if (isParagraph) {
+          setIsText(true)
+          setIsInteractive(false)
+          return
+        }
+
         setIsText(false)
-        const clickable = target.closest('button, a, [role="button"], .interactive-element')
-        setIsInteractive(!!clickable)
-      }
+        setIsInteractive(false)
+      })
     }
 
     const handleDown = () => {
