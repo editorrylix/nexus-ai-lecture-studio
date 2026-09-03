@@ -16,7 +16,6 @@ import {
   Trash2, 
   Copy, 
   Check, 
-  Sparkles, 
   Layers, 
   BookOpen, 
   CheckCircle2, 
@@ -29,7 +28,6 @@ import {
   GraduationCap, 
   Clock, 
   CheckCheck,
-  Radio,
   Mic,
   Square,
   Volume2,
@@ -46,19 +44,172 @@ import {
   Code,
   UploadCloud,
   Play,
-  Pause,
-  FastForward,
-  HardDrive,
-  Cpu
+  Pause
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Image from 'next/image'
 
-// Helper to render recognized app icons
+// ==========================================
+// 1. CUSTOM MODERN CURSOR (Inspired by modern design studios)
+// ==========================================
+function ModernCursor() {
+  const [pos, setPos] = useState({ x: -100, y: -100 })
+  const [isHovered, setIsHovered] = useState(false)
+  const [isInput, setIsInput] = useState(false)
+  const [isClicking, setIsClicking] = useState(false)
+  const [hoverLabel, setHoverLabel] = useState('')
+
+  useEffect(() => {
+    const handleMove = (e: MouseEvent) => {
+      setPos({ x: e.clientX, y: e.clientY })
+      const target = e.target as HTMLElement
+      const inputEl = target?.closest('input, textarea')
+      if (inputEl) {
+        setIsInput(true)
+        setIsHovered(false)
+        setHoverLabel('')
+        return
+      } else {
+        setIsInput(false)
+      }
+
+      const interactive = target?.closest('button, a, [role="button"], .interactive-element')
+      if (interactive) {
+        setIsHovered(true)
+        const label = interactive.getAttribute('data-cursor') || (interactive.tagName === 'BUTTON' ? 'CLICK' : 'VIEW')
+        setHoverLabel(label)
+      } else {
+        setIsHovered(false)
+        setHoverLabel('')
+      }
+    }
+
+    const handleDown = () => setIsClicking(true)
+    const handleUp = () => setIsClicking(false)
+
+    window.addEventListener('mousemove', handleMove)
+    window.addEventListener('mousedown', handleDown)
+    window.addEventListener('mouseup', handleUp)
+    return () => {
+      window.removeEventListener('mousemove', handleMove)
+      window.removeEventListener('mousedown', handleDown)
+      window.removeEventListener('mouseup', handleUp)
+    }
+  }, [])
+
+  return (
+    <div className="pointer-events-none fixed inset-0 z-[999999] overflow-hidden hidden md:block select-none">
+      {/* 1. Precision Center Dot (Follows 1:1 instantaneously without lag) */}
+      <div 
+        className="fixed top-0 left-0 rounded-full bg-white pointer-events-none"
+        style={{
+          width: isInput ? '2px' : '6px',
+          height: isInput ? '18px' : '6px',
+          borderRadius: isInput ? '1px' : '9999px',
+          transform: `translate3d(${pos.x - (isInput ? 1 : 3)}px, ${pos.y - (isInput ? 9 : 3)}px, 0)`,
+          boxShadow: '0 0 10px rgba(255,255,255,0.9)'
+        }}
+      />
+
+      {/* 2. Trailing Outer Halo Ring (Physics Spring) */}
+      {!isInput && (
+        <motion.div
+          className="fixed top-0 left-0 rounded-full border border-white/40 pointer-events-none flex items-center justify-center"
+          animate={{
+            x: pos.x - (isHovered ? 26 : 16),
+            y: pos.y - (isHovered ? 26 : 16),
+            width: isHovered ? 52 : 32,
+            height: isHovered ? 52 : 32,
+            borderColor: isHovered ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.3)',
+            backgroundColor: isHovered ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.01)',
+            scale: isClicking ? 0.85 : 1,
+          }}
+          transition={{ type: "spring", stiffness: 350, damping: 24, mass: 0.1 }}
+          style={{ backdropFilter: isHovered ? 'blur(2px)' : 'none' }}
+        >
+          {isHovered && (
+            <div className="absolute -top-1 -right-1 w-2 h-2 border-t-2 border-r-2 border-white rounded-tr-sm" />
+          )}
+        </motion.div>
+      )}
+
+      {/* 3. Dynamic Interactive Tag */}
+      <AnimatePresence>
+        {isHovered && hoverLabel && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.6, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.6, y: 5 }}
+            className="fixed top-0 left-0 pointer-events-none"
+            style={{
+              transform: `translate3d(${pos.x + 22}px, ${pos.y + 14}px, 0)`
+            }}
+          >
+            <div className="bg-white text-black px-1.5 py-0.5 rounded text-[9px] font-mono font-bold tracking-widest shadow-xl flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping" />
+              <span>{hoverLabel}</span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}
+
+// ==========================================
+// 2. INTERACTIVE 3D TILT CARD WRAPPER
+// ==========================================
+function Card3D({ children, className = "" }: { children: React.ReactNode, className?: string }) {
+  const [rotate, setRotate] = useState({ x: 0, y: 0 })
+  const [glow, setGlow] = useState({ x: 50, y: 50 })
+  const cardRef = useRef<HTMLDivElement>(null)
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!cardRef.current) return
+    const rect = cardRef.current.getBoundingClientRect()
+    const x = e.clientX - rect.left
+    const y = e.clientY - rect.top
+    const centerX = rect.width / 2
+    const centerY = rect.height / 2
+
+    const rotX = ((y - centerY) / centerY) * -4
+    const rotY = ((x - centerX) / centerX) * 4
+
+    setRotate({ x: rotX, y: rotY })
+    setGlow({ x: (x / rect.width) * 100, y: (y / rect.height) * 100 })
+  }
+
+  const handleMouseLeave = () => {
+    setRotate({ x: 0, y: 0 })
+  }
+
+  return (
+    <motion.div
+      ref={cardRef}
+      onMouseMove={handleMouseMove}
+      onMouseLeave={handleMouseLeave}
+      animate={{ rotateX: rotate.x, rotateY: rotate.y }}
+      transition={{ type: "spring", stiffness: 320, damping: 26 }}
+      style={{ transformStyle: "preserve-3d", perspective: 1200 }}
+      className={`relative group interactive-element ${className}`}
+    >
+      {/* Specular Light Reflection */}
+      <div 
+        className="absolute inset-0 rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
+        style={{
+          background: `radial-gradient(circle at ${glow.x}% ${glow.y}%, rgba(255,255,255,0.06) 0%, transparent 65%)`
+        }}
+      />
+      {children}
+    </motion.div>
+  )
+}
+
+// App icons
 function AppIcon({ appType }: { appType: string }) {
   const type = (appType || '').toLowerCase()
-  if (type === 'chrome') return <Globe className="w-4 h-4 text-amber-400" />
-  if (type === 'teams') return <Monitor className="w-4 h-4 text-cyan-400" />
+  if (type === 'chrome') return <Globe className="w-4 h-4 text-sky-400" />
+  if (type === 'teams') return <Monitor className="w-4 h-4 text-blue-400" />
   if (type === 'discord') return <Headphones className="w-4 h-4 text-indigo-400" />
   if (type === 'spotify') return <Music className="w-4 h-4 text-emerald-400" />
   if (type === 'ide') return <Code className="w-4 h-4 text-purple-400" />
@@ -66,7 +217,7 @@ function AppIcon({ appType }: { appType: string }) {
 }
 
 export default function Dashboard() {
-  // Session State
+  // State
   const [sessions, setSessions] = useState<any[]>([])
   const [selectedSession, setSelectedSession] = useState<any>(null)
   const [activeTab, setActiveTab] = useState<'summary' | 'flashcards' | 'quiz' | 'transcript' | 'chat'>('summary')
@@ -78,7 +229,6 @@ export default function Dashboard() {
   const [toastMessage, setToastMessage] = useState<{type: 'success' | 'error' | 'info', text: string} | null>(null)
   const [copiedText, setCopiedText] = useState(false)
   const [storageDir, setStorageDir] = useState<string>('')
-  const [currentTimeStr, setCurrentTimeStr] = useState<string>('')
 
   // Renaming State
   const [editingTitleId, setEditingTitleId] = useState<string | null>(null)
@@ -92,9 +242,8 @@ export default function Dashboard() {
   // Settings Modal State
   const [showSettings, setShowSettings] = useState(false)
 
-  // Integrated Audio Studio State
+  // Audio Studio State
   const [showStudio, setShowStudio] = useState(false)
-  const [audioOnline, setAudioOnline] = useState(false)
   const [processes, setProcesses] = useState<any[]>([])
   const [selectedPid, setSelectedPid] = useState<number | null>(null)
   const [selectedAppName, setSelectedAppName] = useState<string>('')
@@ -102,8 +251,6 @@ export default function Dashboard() {
   const [isProcessingAI, setIsProcessingAI] = useState(false)
   const [recordingSeconds, setRecordingSeconds] = useState(0)
   const [vuLevel, setVuLevel] = useState(0)
-  const [showDiagnostics, setShowDiagnostics] = useState(false)
-  const [diagnosticLogs, setDiagnosticLogs] = useState<string[]>([])
 
   // Audio Upload / Import State
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -111,31 +258,23 @@ export default function Dashboard() {
 
   const showToast = (text: string, type: 'success' | 'error' | 'info' = 'info') => {
     setToastMessage({ type, text })
-    setTimeout(() => setToastMessage(null), 3500)
+    setTimeout(() => setToastMessage(null), 3000)
   }
 
-  // Initial Load & Ambient Clock
+  // Initial Load
   useEffect(() => {
     fetchSessions()
     checkAudioStatus()
     const sessionInterval = setInterval(fetchSessions, 6000)
     const audioInterval = setInterval(checkAudioStatus, 1500)
-    
-    // Live ticking clock inspired by akashawal.com
-    const clockInterval = setInterval(() => {
-      const now = new Date()
-      setCurrentTimeStr(now.toLocaleTimeString([], { hour12: false }))
-    }, 1000)
-
     setMounted(true)
     return () => {
       clearInterval(sessionInterval)
       clearInterval(audioInterval)
-      clearInterval(clockInterval)
     }
   }, [])
 
-  // Load Sessions from Local Storage
+  // Load Sessions
   const fetchSessions = async () => {
     setIsRefreshing(true)
     try {
@@ -160,25 +299,21 @@ export default function Dashboard() {
     }
   }
 
-  // Audio Engine Bridge Status
+  // Audio Status
   const checkAudioStatus = async () => {
     try {
       const res = await fetch('/api/audio?action=status', { cache: 'no-store' })
       if (res.ok) {
         const data = await res.json()
-        setAudioOnline(data.online)
         if (data.online) {
           setIsRecording(data.isRecording)
           setIsProcessingAI(data.isProcessing)
           setRecordingSeconds(data.elapsed || 0)
           setVuLevel(data.vuLevel || 0)
-          if (data.lastError) {
-            addDiagnostic(`[ERROR] ${data.lastError}`)
-          }
         }
       }
     } catch {
-      setAudioOnline(false)
+      // quiet
     }
   }
 
@@ -194,21 +329,14 @@ export default function Dashboard() {
             setSelectedPid(data.processes[0].pid)
             setSelectedAppName(data.processes[0].name)
           }
-          showToast(`Discovered ${data.processes.length} active audio processes.`, "info")
-          addDiagnostic(`Scanned ${data.processes.length} active audio processes.`)
         } else {
           setProcesses([])
-          showToast("No audio currently streaming. Start playing sound in your app first.", "info")
+          showToast("No active audio streams detected.", "info")
         }
       }
     } catch (err: any) {
-      showToast(`Process scan error: ${err.message}`, "error")
+      showToast(`Scan error: ${err.message}`, "error")
     }
-  }
-
-  const addDiagnostic = (msg: string) => {
-    const time = new Date().toLocaleTimeString()
-    setDiagnosticLogs(prev => [`[${time}] ${msg}`, ...prev.slice(0, 49)])
   }
 
   // Start In-Browser Recording
@@ -218,7 +346,6 @@ export default function Dashboard() {
       return
     }
 
-    addDiagnostic(`Initiating WASAPI loopback capture for ${selectedAppName} (PID: ${selectedPid})...`)
     try {
       const res = await fetch('/api/audio', {
         method: 'POST',
@@ -229,7 +356,6 @@ export default function Dashboard() {
       if (data.success) {
         setIsRecording(true)
         showToast(`Recording ${selectedAppName}`, "success")
-        addDiagnostic("Direct loopback stream active via AudioCapturePipe.")
       } else {
         showToast(`Failed: ${data.message || 'Unknown error'}`, "error")
       }
@@ -240,7 +366,6 @@ export default function Dashboard() {
 
   // Stop In-Browser Recording
   const handleStopRecording = async () => {
-    addDiagnostic("Stopping capture. Triggering Gemini 3.6 Flash synthesis...")
     try {
       const res = await fetch('/api/audio', {
         method: 'POST',
@@ -251,7 +376,7 @@ export default function Dashboard() {
       if (data.success) {
         setIsRecording(false)
         setIsProcessingAI(true)
-        showToast("Recording stopped! Gemini is synthesizing notes & flashcards...", "info")
+        showToast("Recording stopped. Synthesizing notes...", "info")
         setTimeout(fetchSessions, 4000)
         setTimeout(fetchSessions, 8000)
       }
@@ -266,7 +391,7 @@ export default function Dashboard() {
     if (!file) return
 
     setIsUploadingAudio(true)
-    showToast(`Uploading ${file.name} for AI synthesis...`, "info")
+    showToast(`Importing ${file.name}...`, "info")
 
     const formData = new FormData()
     formData.append('file', file)
@@ -278,7 +403,7 @@ export default function Dashboard() {
       })
       const data = await res.json()
       if (data.success && data.session) {
-        showToast("Audio processed & synthesized successfully!", "success")
+        showToast("Lecture imported successfully", "success")
         await fetchSessions()
         setSelectedSession(data.session)
       } else {
@@ -303,9 +428,9 @@ export default function Dashboard() {
         if (selectedSession?.id === sessionToDelete.id) {
           setSelectedSession(sessions.find(s => s.id !== sessionToDelete.id) || null)
         }
-        showToast("Lecture removed from local vault.", "success")
+        showToast("Session deleted.", "success")
       } else {
-        throw new Error("Failed to delete from local disk.")
+        throw new Error("Failed to delete session.")
       }
     } catch (err: any) {
       showToast(err.message, "error")
@@ -315,7 +440,7 @@ export default function Dashboard() {
     }
   }
 
-  // Rename Local Session
+  // Rename Session
   const saveRename = async (id: string, newTitle?: string) => {
     const titleToSave = newTitle || editTitleValue
     if (!titleToSave.trim()) {
@@ -333,7 +458,7 @@ export default function Dashboard() {
         if (selectedSession?.id === id) {
           setSelectedSession((prev: any) => ({ ...prev, title: titleToSave.trim() }))
         }
-        showToast("Title updated.", "success")
+        showToast("Renamed", "success")
       }
     } catch (err: any) {
       showToast(`Rename failed: ${err.message}`, "error")
@@ -342,7 +467,7 @@ export default function Dashboard() {
     }
   }
 
-  // Pin Local Session
+  // Pin Session
   const handleTogglePin = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation()
     try {
@@ -355,7 +480,7 @@ export default function Dashboard() {
         fetchSessions()
       }
     } catch (err: any) {
-      showToast(`Pin failed: ${err.message}`, "error")
+      showToast(`Pin error: ${err.message}`, "error")
     }
   }
 
@@ -367,7 +492,7 @@ export default function Dashboard() {
     }
 
     setIsStitching(true)
-    showToast("Stitching sessions with Gemini 3.6 Flash...", "info")
+    showToast("Stitching sessions...", "info")
 
     try {
       const res = await fetch('/api/sessions/stitch', {
@@ -378,7 +503,7 @@ export default function Dashboard() {
 
       const data = await res.json()
       if (data.success && data.session) {
-        showToast("Master Study Guide synthesized successfully!", "success")
+        showToast("Master Study Guide created!", "success")
         setStitchMode(false)
         setSelectedForStitch([])
         await fetchSessions()
@@ -403,19 +528,11 @@ export default function Dashboard() {
     )
   }, [sessions, searchQuery])
 
-  // Total statistics across sessions
-  const totalCardsCount = useMemo(() => {
-    return sessions.reduce((acc, s) => {
-      const data = s.flashcards_json || {}
-      return acc + (Array.isArray(data) ? data.length : (data.flashcards?.length || 0))
-    }, 0)
-  }, [sessions])
-
   const handleCopySummary = () => {
     if (!selectedSession?.summary) return
     navigator.clipboard.writeText(selectedSession.summary)
     setCopiedText(true)
-    showToast("Executive summary copied to clipboard.", "success")
+    showToast("Summary copied to clipboard", "success")
     setTimeout(() => setCopiedText(false), 2000)
   }
 
@@ -461,14 +578,21 @@ export default function Dashboard() {
     link.download = `${(selectedSession.title || 'lecture').replace(/[^a-z0-9]/gi, '_').toLowerCase()}.md`
     link.click()
     URL.revokeObjectURL(url)
-    showToast("Exported notes as Markdown for Obsidian / Notion.", "success")
+    showToast("Exported as Markdown for Obsidian / Notion", "success")
   }
 
   if (!mounted) return null
 
   return (
-    <div className="flex flex-col h-screen w-full bg-[#060709] text-[#F3F4F6] font-sans overflow-hidden selection:bg-cyan-400 selection:text-black">
+    <div className="flex flex-col h-screen w-full bg-[#07080B] text-[#F3F4F6] font-sans overflow-hidden selection:bg-white/20 selection:text-white relative">
       
+      {/* 1. Custom Smooth Magnetic Cursor */}
+      <ModernCursor />
+
+      {/* 2. Ambient 3D Depth Lights (Behind Glass) */}
+      <div className="absolute top-0 left-1/4 w-[600px] h-[350px] bg-gradient-to-br from-cyan-500/8 via-indigo-500/5 to-transparent rounded-full blur-[140px] pointer-events-none" />
+      <div className="absolute bottom-0 right-1/4 w-[500px] h-[300px] bg-gradient-to-tl from-purple-500/6 via-blue-500/4 to-transparent rounded-full blur-[130px] pointer-events-none" />
+
       {/* Hidden File Input for Audio Import */}
       <input 
         type="file" 
@@ -478,40 +602,6 @@ export default function Dashboard() {
         className="hidden" 
       />
 
-      {/* --- TOP AMBIENT LIVE STATUS TICKER (Inspired by akashawal.com) --- */}
-      <div className="h-7 w-full border-b border-white/[0.06] bg-[#090B10] px-4 flex items-center justify-between text-[10px] font-mono select-none tracking-wider text-zinc-400 z-30">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5">
-            <span className="relative flex h-2 w-2">
-              <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${audioOnline ? 'bg-cyan-400' : 'bg-red-400'}`}></span>
-              <span className={`relative inline-flex rounded-full h-2 w-2 ${audioOnline ? 'bg-cyan-400' : 'bg-red-500'}`}></span>
-            </span>
-            <span className="font-bold text-zinc-300">
-              {audioOnline ? 'WASAPI LOOPBACK READY' : 'AUDIO ENGINE OFFLINE'}
-            </span>
-          </div>
-
-          <span className="text-zinc-700">|</span>
-          <span className="hidden sm:inline text-zinc-500">ACCELERATION: <strong className="text-cyan-400 font-semibold">GEMINI 3.6 FLASH</strong></span>
-          <span className="text-zinc-700 hidden sm:inline">|</span>
-          <span className="hidden md:inline text-zinc-500">VAULT: <strong className="text-emerald-400 font-semibold">100% LOCAL DISK</strong></span>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <div className="hidden lg:flex items-center gap-2 text-zinc-500">
-            <span>VAULT REPO:</span>
-            <span className="text-zinc-300 font-mono bg-white/[0.04] px-1.5 py-0.5 rounded border border-white/[0.05]">
-              {sessions.length} LECTURES • {totalCardsCount} FLASHCARDS
-            </span>
-          </div>
-          <span className="text-zinc-700 hidden lg:inline">|</span>
-          <div className="text-zinc-400 font-mono flex items-center gap-1">
-            <Clock className="w-2.5 h-2.5 text-cyan-400" />
-            <span>{currentTimeStr || '--:--:--'}</span>
-          </div>
-        </div>
-      </div>
-
       {/* --- TOAST NOTIFICATION --- */}
       <AnimatePresence>
         {toastMessage && (
@@ -519,94 +609,62 @@ export default function Dashboard() {
             initial={{ opacity: 0, y: -20, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -20, scale: 0.95 }}
-            className={`fixed top-10 right-6 z-50 px-4 py-2.5 rounded-2xl text-xs font-semibold shadow-2xl backdrop-blur-2xl border flex items-center gap-2.5 ${
-              toastMessage.type === 'error' 
-                ? 'bg-red-950/90 border-red-500/40 text-red-200' 
-                : toastMessage.type === 'success'
-                ? 'bg-emerald-950/90 border-emerald-500/40 text-emerald-200'
-                : 'bg-[#0F131C]/95 border-cyan-500/30 text-cyan-200'
-            }`}
+            className="fixed top-6 right-8 z-[100] px-4 py-2 rounded-2xl text-xs font-medium shadow-2xl backdrop-blur-2xl border border-white/[0.12] bg-[#12151E]/90 text-zinc-200 flex items-center gap-2.5"
           >
-            {toastMessage.type === 'error' && <AlertTriangle className="w-4 h-4 text-red-400" />}
-            {toastMessage.type === 'success' && <Check className="w-4 h-4 text-emerald-400" />}
-            {toastMessage.type === 'info' && <Sparkles className="w-4 h-4 text-cyan-400" />}
+            {toastMessage.type === 'error' && <AlertTriangle className="w-3.5 h-3.5 text-red-400" />}
+            {toastMessage.type === 'success' && <Check className="w-3.5 h-3.5 text-emerald-400" />}
+            {toastMessage.type === 'info' && <Circle className="w-3 h-3 text-cyan-400 fill-current" />}
             <span>{toastMessage.text}</span>
           </motion.div>
         )}
       </AnimatePresence>
 
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden z-10">
         
-        {/* --- PROFESSIONAL SIDEBAR WITH CUSTOM BRAND LOGO --- */}
-        <aside className="w-88 flex-shrink-0 bg-[#090B10]/95 backdrop-blur-3xl border-r border-white/[0.07] flex flex-col z-20">
+        {/* --- SLEEK APPLE GLASS SIDEBAR --- */}
+        <aside className="w-80 flex-shrink-0 bg-[#0A0C11]/80 backdrop-blur-3xl border-r border-white/[0.08] flex flex-col z-20">
           
-          {/* Custom Brand Logo Header */}
+          {/* Brand Header */}
           <div className="px-5 py-4 border-b border-white/[0.06] flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              {/* Custom Vector Brand Logo */}
-              <div className="relative group">
-                <div className="w-9 h-9 rounded-xl overflow-hidden p-[1px] bg-gradient-to-tr from-cyan-400 via-sky-500 to-indigo-500 shadow-[0_0_15px_rgba(34,211,238,0.25)] flex items-center justify-center">
-                  <div className="w-full h-full bg-[#090B10] rounded-[11px] flex items-center justify-center p-1">
-                    <Image src="/nexus-logo.svg" alt="Nexus Logo" width={28} height={28} priority />
-                  </div>
-                </div>
+            <div className="flex items-center gap-2.5">
+              <div className="w-7 h-7 rounded-xl overflow-hidden p-[1px] bg-gradient-to-tr from-white/20 to-white/5 border border-white/[0.1] flex items-center justify-center shadow-sm">
+                <Image src="/nexus-logo.svg" alt="Nexus" width={20} height={20} priority />
               </div>
-
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-extrabold text-base tracking-wider text-white font-mono">NEXUS</span>
-                  <span className="text-[9px] uppercase font-bold tracking-widest px-1.5 py-0.5 rounded bg-cyan-400 text-black font-mono">STUDIO</span>
-                </div>
-                <p className="text-[10px] text-zinc-500 tracking-wider font-mono uppercase mt-0.5">Local Lecture Vault</p>
-              </div>
+              <span className="font-semibold text-sm tracking-tight text-white/90">Nexus</span>
             </div>
 
-            {/* Header Utilities */}
             <div className="flex items-center gap-1">
               <button 
                 onClick={() => {
                   setStitchMode(!stitchMode)
                   setSelectedForStitch([])
                 }}
-                title="Stitch / Merge multiple sessions"
-                className={`p-1.5 rounded-lg text-xs font-medium transition-all ${
-                  stitchMode ? 'bg-cyan-400 text-black font-bold shadow-md shadow-cyan-400/20' : 'text-zinc-400 hover:text-white hover:bg-white/[0.06]'
+                title="Stitch multiple sessions"
+                className={`p-1.5 rounded-lg text-xs transition-all ${
+                  stitchMode ? 'bg-white/20 text-white font-medium shadow-sm' : 'text-zinc-400 hover:text-white hover:bg-white/[0.06]'
                 }`}
               >
-                <GitMerge className="w-4 h-4" />
+                <GitMerge className="w-3.5 h-3.5" />
               </button>
 
               <button 
                 onClick={fetchSessions}
-                title="Refresh local storage"
+                title="Refresh sessions"
                 className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/[0.06] active:scale-95 transition-all"
               >
-                <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-cyan-400' : ''}`} />
+                <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-white' : ''}`} />
               </button>
             </div>
           </div>
 
-          {/* Interactive Campus Sticker Badge (Inspired by Akash's playful stickers) */}
-          <div className="px-4 pt-3 pb-1">
-            <div className="flex items-center justify-between">
-              <div 
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-bold text-black bg-amber-300 shadow-sm select-none cursor-default font-mono tracking-wide"
-                style={{ transform: 'rotate(-2deg)' }}
-              >
-                <span>⚡ ZERO CLOUD SUBSCRIPTION</span>
-              </div>
-              <span className="text-[10px] text-zinc-500 font-mono">v2.4 PRO</span>
-            </div>
-          </div>
-
-          {/* Stitch Mode Alert Pill */}
+          {/* Stitch Mode Alert */}
           {stitchMode && (
             <div className="px-3.5 pt-2.5 pb-1">
-              <div className="bg-indigo-950/40 border border-indigo-500/40 rounded-xl p-2.5 text-xs text-indigo-300 flex items-center justify-between">
-                <span>Select sessions to stitch ({selectedForStitch.length} selected)</span>
+              <div className="bg-white/[0.04] border border-white/[0.1] rounded-xl p-2.5 text-xs text-zinc-300 flex items-center justify-between">
+                <span>Select sessions ({selectedForStitch.length})</span>
                 <button 
                   onClick={() => setStitchMode(false)}
-                  className="text-indigo-400 hover:text-white text-[11px] font-semibold"
+                  className="text-white hover:underline text-[11px]"
                 >
                   Done
                 </button>
@@ -622,8 +680,8 @@ export default function Dashboard() {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search lectures, topics, concepts..."
-                className="w-full bg-white/[0.04] border border-white/[0.07] rounded-xl pl-8 pr-3 py-1.5 text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-cyan-400/50 focus:bg-white/[0.07] transition-all font-sans"
+                placeholder="Search lectures & notes..."
+                className="w-full bg-white/[0.03] border border-white/[0.07] rounded-xl pl-8 pr-3 py-1.5 text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-white/20 focus:bg-white/[0.05] transition-all"
               />
               {searchQuery && (
                 <button 
@@ -637,7 +695,7 @@ export default function Dashboard() {
           </div>
 
           {/* Sessions List */}
-          <div className="flex-1 overflow-y-auto px-3 py-2 space-y-1.5">
+          <div className="flex-1 overflow-y-auto px-3 py-2 space-y-1">
             {filteredSessions.map((s) => {
               const isSelected = selectedSession?.id === s.id
               const isCheckedForStitch = selectedForStitch.includes(s.id)
@@ -659,28 +717,28 @@ export default function Dashboard() {
                       setSelectedSession(s)
                     }
                   }}
-                  className={`group relative p-3 rounded-xl cursor-pointer transition-all duration-150 border active:scale-[0.99] ${
+                  className={`group relative p-3 rounded-2xl cursor-pointer transition-all duration-150 border active:scale-[0.99] ${
                     isSelected && !stitchMode
-                      ? 'bg-cyan-500/[0.08] border-cyan-400/30 shadow-[0_2px_14px_rgba(34,211,238,0.12)]' 
+                      ? 'bg-white/[0.08] border-white/[0.18] shadow-[0_4px_20px_rgba(0,0,0,0.3)]' 
                       : isCheckedForStitch
-                      ? 'bg-indigo-600/[0.15] border-indigo-500/40'
-                      : 'bg-white/[0.02] border-white/[0.04] hover:bg-white/[0.05] hover:border-white/[0.08]'
+                      ? 'bg-white/[0.06] border-white/[0.15]'
+                      : 'bg-transparent border-transparent hover:bg-white/[0.03] hover:border-white/[0.05]'
                   }`}
                 >
                   <div className="flex items-center justify-between gap-1 mb-1">
-                    <div className="flex items-center gap-1.5 text-xs font-medium">
+                    <div className="flex items-center gap-1.5 text-xs text-zinc-400">
                       {stitchMode && (
                         <input 
                           type="checkbox"
                           checked={isCheckedForStitch}
                           onChange={() => {}}
-                          className="w-3.5 h-3.5 rounded border-white/20 text-cyan-400 focus:ring-0 mr-1"
+                          className="w-3.5 h-3.5 rounded border-white/20 text-white focus:ring-0 mr-1"
                         />
                       )}
-                      {s.pinned && <Pin className="w-3 h-3 text-amber-400 rotate-45" />}
-                      <span className={isSelected ? 'text-cyan-300 font-semibold' : 'text-zinc-200'}>{dateStr}</span>
+                      {s.pinned && <Pin className="w-3 h-3 text-amber-300 rotate-45" />}
+                      <span className={isSelected ? 'text-white font-medium' : 'text-zinc-300'}>{dateStr}</span>
                       <span className="text-zinc-600 text-[10px]">•</span>
-                      <span className="text-zinc-500 text-[11px] font-mono">{timeStr}</span>
+                      <span className="text-zinc-500 text-[11px]">{timeStr}</span>
                     </div>
 
                     {!stitchMode && (
@@ -688,9 +746,9 @@ export default function Dashboard() {
                         <button 
                           onClick={(e) => handleTogglePin(e, s.id)}
                           title={s.pinned ? "Unpin" : "Pin to top"}
-                          className="p-1 text-zinc-500 hover:text-amber-400 hover:bg-white/[0.06] rounded-md transition-all"
+                          className="p-1 text-zinc-500 hover:text-amber-300 hover:bg-white/[0.06] rounded-md transition-all"
                         >
-                          <Pin className={`w-3 h-3 ${s.pinned ? 'text-amber-400' : ''}`} />
+                          <Pin className={`w-3 h-3 ${s.pinned ? 'text-amber-300' : ''}`} />
                         </button>
                         <button 
                           onClick={(e) => {
@@ -706,7 +764,7 @@ export default function Dashboard() {
                     )}
                   </div>
 
-                  {/* Title (Inline Rename Support) */}
+                  {/* Title (Inline Rename) */}
                   {editingTitleId === s.id ? (
                     <div className="my-1 flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                       <input 
@@ -718,9 +776,9 @@ export default function Dashboard() {
                           if (e.key === 'Escape') setEditingTitleId(null)
                         }}
                         autoFocus
-                        className="flex-1 bg-white/[0.08] border border-cyan-400 rounded px-2 py-0.5 text-xs text-white focus:outline-none"
+                        className="flex-1 bg-white/[0.08] border border-white/20 rounded-lg px-2 py-0.5 text-xs text-white focus:outline-none"
                       />
-                      <button onClick={() => saveRename(s.id)} className="p-1 text-cyan-400 hover:text-cyan-300">
+                      <button onClick={() => saveRename(s.id)} className="p-1 text-emerald-400 hover:text-emerald-300">
                         <Check className="w-3.5 h-3.5" />
                       </button>
                     </div>
@@ -731,31 +789,26 @@ export default function Dashboard() {
                         setEditingTitleId(s.id)
                         setEditTitleValue(s.title || displayTitle)
                       }}
-                      className="text-xs font-semibold text-zinc-200 line-clamp-1 leading-snug tracking-tight"
+                      className="text-xs font-medium text-zinc-100 line-clamp-1 leading-snug tracking-tight"
                     >
                       {displayTitle}
                     </h4>
                   )}
 
                   <p className="text-[11px] text-zinc-400 line-clamp-1 leading-relaxed mt-1">
-                    {s.summary || 'No summary generated.'}
+                    {s.summary || 'No summary available.'}
                   </p>
 
                   <div className="mt-2 flex items-center gap-1.5 flex-wrap">
                     {flashcardCount > 0 && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-white/[0.04] text-zinc-400 border border-white/[0.05] flex items-center gap-1 font-mono">
-                        <Layers className="w-2.5 h-2.5 text-cyan-400" />
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/[0.04] text-zinc-400 border border-white/[0.06] flex items-center gap-1">
+                        <Layers className="w-2.5 h-2.5 text-zinc-300" />
                         {flashcardCount} cards
                       </span>
                     )}
                     {s.audio_path && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono flex items-center gap-1">
-                        <Volume2 className="w-2.5 h-2.5" /> Audio Ready
-                      </span>
-                    )}
-                    {s.tags?.includes("Stitched Master Guide") && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 font-mono">
-                        Master Guide
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/[0.04] text-zinc-400 border border-white/[0.06] flex items-center gap-1">
+                        <Volume2 className="w-2.5 h-2.5 text-zinc-300" /> Audio
                       </span>
                     )}
                   </div>
@@ -765,125 +818,118 @@ export default function Dashboard() {
 
             {filteredSessions.length === 0 && (
               <div className="text-center py-12 px-4 text-zinc-600">
-                <div className="w-10 h-10 rounded-2xl bg-white/[0.02] border border-white/[0.05] flex items-center justify-center mx-auto mb-3">
-                  <Radio className="w-5 h-5 text-zinc-600" />
-                </div>
                 <p className="text-xs font-medium text-zinc-400">No sessions recorded yet</p>
-                <p className="text-[11px] text-zinc-600 mt-1">Click "Record Lecture" at the top or import an audio file.</p>
+                <p className="text-[11px] text-zinc-600 mt-1">Click "Record" at the top to begin.</p>
               </div>
             )}
           </div>
 
-          {/* Floating Stitch Action Button */}
+          {/* Stitch Button */}
           {stitchMode && selectedForStitch.length >= 2 && (
-            <div className="p-3 bg-indigo-950/70 border-t border-indigo-500/30">
+            <div className="p-3 bg-white/[0.03] border-t border-white/[0.08]">
               <button
                 onClick={handleStitchSessions}
                 disabled={isStitching}
-                className="w-full py-2 bg-gradient-to-r from-cyan-400 to-blue-500 text-black rounded-xl text-xs font-bold shadow-lg shadow-cyan-400/20 transition-all active:scale-95 flex items-center justify-center gap-2"
+                className="w-full py-2 bg-white text-black rounded-xl text-xs font-medium transition-all active:scale-95 flex items-center justify-center gap-2 shadow-lg shadow-white/10"
               >
                 {isStitching ? (
                   <>
                     <RefreshCw className="w-3.5 h-3.5 animate-spin text-black" />
-                    <span>Synthesizing Master Guide...</span>
+                    <span>Stitching...</span>
                   </>
                 ) : (
                   <>
                     <GitMerge className="w-3.5 h-3.5" />
-                    <span>Stitch {selectedForStitch.length} Lectures</span>
+                    <span>Stitch {selectedForStitch.length} Sessions</span>
                   </>
                 )}
               </button>
             </div>
           )}
 
-          {/* Sidebar Footer with Storage & Import */}
-          <div className="p-3 border-t border-white/[0.06] bg-[#07080C]/80 flex items-center justify-between text-[11px] text-zinc-500">
-            <div className="flex items-center gap-2">
-              <button 
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isUploadingAudio}
-                title="Import .wav or .mp3 audio file"
-                className="flex items-center gap-1.5 text-zinc-400 hover:text-cyan-300 transition-colors"
-              >
-                <UploadCloud className="w-3.5 h-3.5 text-cyan-400" />
-                <span>{isUploadingAudio ? 'Synthesizing...' : 'Import Audio'}</span>
-              </button>
-            </div>
+          {/* Sidebar Footer */}
+          <div className="p-3 border-t border-white/[0.06] bg-[#0A0C11]/50 flex items-center justify-between text-[11px] text-zinc-500">
+            <button 
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isUploadingAudio}
+              className="flex items-center gap-1.5 text-zinc-400 hover:text-white transition-colors"
+            >
+              <UploadCloud className="w-3.5 h-3.5" />
+              <span>{isUploadingAudio ? 'Importing...' : 'Import Audio'}</span>
+            </button>
 
             <button 
               onClick={() => setShowSettings(true)}
-              title="Storage & Engine Settings"
-              className="p-1 hover:text-white hover:bg-white/[0.06] rounded-md transition-all flex items-center gap-1"
+              className="p-1 hover:text-white hover:bg-white/[0.06] rounded-md transition-all"
             >
               <Settings className="w-3.5 h-3.5 text-zinc-400" />
             </button>
           </div>
         </aside>
 
-        {/* --- MAIN CONTENT CANVAS --- */}
-        <main className="flex-1 flex flex-col overflow-hidden bg-[#060709] relative">
+        {/* --- MAIN WORKSPACE CANVAS --- */}
+        <main className="flex-1 flex flex-col overflow-hidden bg-[#07080B] relative">
           
-          {/* --- HIGH-ENERGY MODERN HEADBAR (Inspired by akashawal.com) --- */}
-          <div className="border-b border-white/[0.07] bg-[#090B10]/95 backdrop-blur-2xl px-8 py-3.5 flex items-center justify-between z-20">
+          {/* --- FLOATING APPLE FROSTED GLASS NAVIGATION BAR --- */}
+          <header className="sticky top-0 z-30 px-8 py-3.5 border-b border-white/[0.06] bg-[#07080B]/60 backdrop-blur-2xl flex items-center justify-between shadow-[0_4px_30px_rgba(0,0,0,0.3)]">
             
-            {/* Left Controls: Record Studio Pill & Import */}
+            {/* Left: Record Drawer Button */}
             <div className="flex items-center gap-3">
               <button 
                 onClick={() => {
                   setShowStudio(!showStudio)
                   if (!showStudio) scanProcesses()
                 }}
-                className={`flex items-center gap-2 px-4 py-1.5 rounded-full border text-xs font-bold tracking-wide transition-all active:scale-[0.96] shadow-sm ${
+                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-medium transition-all active:scale-[0.97] border ${
                   isRecording 
-                    ? 'bg-red-500/10 border-red-500/40 text-red-300 animate-pulse' 
+                    ? 'bg-red-500/10 border-red-500/30 text-red-300 animate-pulse' 
                     : showStudio
-                    ? 'bg-cyan-400 text-black border-cyan-400 shadow-md shadow-cyan-400/20'
-                    : 'bg-cyan-400 hover:bg-cyan-300 text-black border-cyan-400 shadow-md shadow-cyan-400/15'
+                    ? 'bg-white text-black border-white shadow-md'
+                    : 'bg-white/[0.06] hover:bg-white/[0.1] text-zinc-200 border-white/[0.08]'
                 }`}
               >
                 {isRecording ? (
                   <>
                     <div className="w-2 h-2 rounded-full bg-red-500 animate-ping"></div>
-                    <span>RECORDING ({Math.floor(recordingSeconds / 60)}:{(recordingSeconds % 60).toString().padStart(2, '0')})</span>
+                    <span>Recording ({Math.floor(recordingSeconds / 60)}:{(recordingSeconds % 60).toString().padStart(2, '0')})</span>
                   </>
                 ) : (
                   <>
-                    <Mic className="w-3.5 h-3.5 text-current" />
-                    <span>{showStudio ? "CLOSE STUDIO" : "RECORD LECTURE"}</span>
+                    <Mic className="w-3.5 h-3.5" />
+                    <span>{showStudio ? "Close Studio" : "Record"}</span>
                     <ChevronDown className={`w-3 h-3 transition-transform ${showStudio ? 'rotate-180' : ''}`} />
                   </>
                 )}
               </button>
 
-              {/* Real-time live audio activity waveform indicator */}
+              {/* Dynamic VU Audio Waveform */}
               {isRecording && (
                 <div className="flex items-center gap-1.5 px-3 py-1 bg-white/[0.04] border border-white/[0.08] rounded-full">
                   <div className="flex items-center gap-0.5 h-3">
                     {[0.3, 0.7, 1.0, 0.5, 0.8, 0.4].map((scale, i) => (
                       <motion.div
                         key={i}
-                        className="w-0.5 bg-cyan-400 rounded-full"
+                        className="w-0.5 bg-white rounded-full"
                         animate={{ height: `${Math.max(3, vuLevel * 12 * scale)}px` }}
                         transition={{ duration: 0.1 }}
                       />
                     ))}
                   </div>
-                  <span className="text-[10px] text-zinc-300 font-mono ml-1">{selectedAppName}</span>
+                  <span className="text-[10px] text-zinc-400 ml-1">{selectedAppName}</span>
                 </div>
               )}
 
               {isProcessingAI && (
-                <div className="flex items-center gap-2 px-3.5 py-1 bg-cyan-500/10 border border-cyan-500/30 rounded-full text-xs text-cyan-300 font-medium">
-                  <RefreshCw className="w-3 h-3 animate-spin text-cyan-400" />
-                  <span>Synthesizing with Gemini 3.6 Flash...</span>
+                <div className="flex items-center gap-2 px-3 py-1 bg-white/[0.04] border border-white/[0.08] rounded-full text-xs text-zinc-300">
+                  <RefreshCw className="w-3 h-3 animate-spin text-white" />
+                  <span>Synthesizing notes...</span>
                 </div>
               )}
             </div>
 
-            {/* Middle: Segmented Navigation Control */}
+            {/* Middle: Apple Segmented Pill */}
             {selectedSession && (
-              <div className="flex p-1 bg-white/[0.03] border border-white/[0.08] rounded-2xl relative shadow-inner">
+              <div className="flex p-1 bg-white/[0.04] border border-white/[0.08] rounded-2xl relative shadow-inner">
                 {[
                   { id: 'summary', icon: Layout, label: 'Summary' },
                   { id: 'flashcards', icon: Layers, label: 'Flashcards' },
@@ -896,15 +942,15 @@ export default function Dashboard() {
                     <button
                       key={tab.id}
                       onClick={() => setActiveTab(tab.id as any)}
-                      className={`relative flex items-center gap-1.5 px-3.5 py-1 text-xs font-semibold rounded-xl transition-colors z-10 ${
-                        isActive ? 'text-black font-bold' : 'text-zinc-400 hover:text-zinc-200'
+                      className={`relative flex items-center gap-1.5 px-3.5 py-1 text-xs font-medium rounded-xl transition-colors z-10 ${
+                        isActive ? 'text-white font-semibold' : 'text-zinc-400 hover:text-zinc-200'
                       }`}
                     >
                       {isActive && (
                         <motion.div 
                           layoutId="activeTabPill"
-                          className="absolute inset-0 bg-cyan-400 rounded-xl shadow-md shadow-cyan-400/20"
-                          transition={{ type: "spring", stiffness: 420, damping: 32 }}
+                          className="absolute inset-0 bg-white/[0.12] border border-white/[0.14] rounded-xl shadow-sm"
+                          transition={{ type: "spring", stiffness: 400, damping: 30 }}
                         />
                       )}
                       <tab.icon className="w-3.5 h-3.5 relative z-10" />
@@ -915,13 +961,13 @@ export default function Dashboard() {
               </div>
             )}
 
-            {/* Right: Export Utilities */}
+            {/* Right: Actions */}
             {selectedSession && (
               <div className="flex items-center gap-2">
                 <button 
                   onClick={handleExportMarkdown}
-                  title="Export notes as Markdown (.md) for Obsidian / Notion"
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-xs font-semibold text-zinc-200 transition-all active:scale-95"
+                  title="Export notes as Markdown for Obsidian / Notion"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-xs font-medium text-zinc-300 transition-all active:scale-95"
                 >
                   <FileDown className="w-3.5 h-3.5 text-zinc-400" />
                   <span>Markdown</span>
@@ -929,9 +975,9 @@ export default function Dashboard() {
 
                 <button 
                   onClick={handleCopySummary}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-xs font-semibold text-zinc-200 transition-all active:scale-95"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-xs font-medium text-zinc-300 transition-all active:scale-95"
                 >
-                  {copiedText ? <Check className="w-3.5 h-3.5 text-cyan-400" /> : <Copy className="w-3.5 h-3.5 text-zinc-400" />}
+                  {copiedText ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-zinc-400" />}
                   <span>{copiedText ? 'Copied' : 'Copy'}</span>
                 </button>
 
@@ -939,48 +985,36 @@ export default function Dashboard() {
                   <a 
                     href={selectedSession.flashcards_json.anki_url} 
                     download
-                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold shadow-md shadow-blue-500/25 active:scale-95 transition-all"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white text-black font-medium text-xs shadow-md shadow-white/10 active:scale-95 transition-all"
                   >
-                    <Download className="w-3.5 h-3.5" />
+                    <Download className="w-3.5 h-3.5 text-black" />
                     <span>Anki</span>
                   </a>
                 )}
               </div>
             )}
-          </div>
+          </header>
 
-          {/* --- IN-BROWSER AUDIO RECORDING STUDIO DRAWER --- */}
+          {/* --- IN-BROWSER RECORDING STUDIO DRAWER --- */}
           <AnimatePresence>
             {showStudio && (
               <motion.div 
                 initial={{ height: 0, opacity: 0 }}
                 animate={{ height: 'auto', opacity: 1 }}
                 exit={{ height: 0, opacity: 0 }}
-                className="overflow-hidden border-b border-white/[0.08] bg-[#0A0D14]/95 backdrop-blur-3xl z-10"
+                className="overflow-hidden border-b border-white/[0.08] bg-[#0A0D14]/90 backdrop-blur-3xl z-20"
               >
                 <div className="max-w-4xl mx-auto px-8 py-5">
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-2">
-                      <Radio className="w-4 h-4 text-cyan-400" />
-                      <h3 className="text-sm font-bold text-white tracking-tight font-mono">WASAPI AUDIO HOOK</h3>
-                      <span className="text-[10px] text-zinc-500 font-mono bg-white/[0.04] px-2 py-0.5 rounded border border-white/[0.06]">
-                        Direct Process Capture
-                      </span>
+                      <h3 className="text-sm font-medium text-white tracking-tight">Audio Capture Source</h3>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <button 
-                        onClick={scanProcesses}
-                        className="text-xs text-cyan-400 hover:text-cyan-300 font-semibold flex items-center gap-1 font-mono"
-                      >
-                        <RefreshCw className="w-3 h-3" /> Rescan Apps
-                      </button>
-                      <button 
-                        onClick={() => setShowDiagnostics(!showDiagnostics)}
-                        className="text-xs text-zinc-500 hover:text-zinc-300 font-mono"
-                      >
-                        {showDiagnostics ? "Hide Diagnostics" : "Show Diagnostics"}
-                      </button>
-                    </div>
+                    <button 
+                      onClick={scanProcesses}
+                      className="text-xs text-zinc-400 hover:text-white flex items-center gap-1 transition-colors"
+                    >
+                      <RefreshCw className="w-3 h-3" /> Rescan Apps
+                    </button>
                   </div>
 
                   {/* Audio App Grid */}
@@ -998,15 +1032,15 @@ export default function Dashboard() {
                           }}
                           className={`p-3 rounded-2xl border flex items-center gap-3 cursor-pointer transition-all ${
                             isSelected 
-                              ? 'bg-cyan-500/[0.12] border-cyan-400/50 shadow-md shadow-cyan-400/10' 
+                              ? 'bg-white/[0.1] border-white/[0.25] shadow-lg shadow-black/40' 
                               : 'bg-white/[0.02] border-white/[0.06] hover:bg-white/[0.05]'
                           } ${isRecording ? 'opacity-50 cursor-not-allowed' : ''}`}
                         >
-                          <div className="w-9 h-9 rounded-xl bg-white/[0.05] border border-white/[0.08] flex items-center justify-center flex-shrink-0">
+                          <div className="w-8 h-8 rounded-xl bg-white/[0.05] border border-white/[0.08] flex items-center justify-center flex-shrink-0">
                             <AppIcon appType={p.appType} />
                           </div>
                           <div className="overflow-hidden">
-                            <div className="text-xs font-bold text-white truncate">{p.name}</div>
+                            <div className="text-xs font-medium text-white truncate">{p.name}</div>
                             <div className="text-[10px] text-zinc-500 font-mono truncate">PID: {p.pid}</div>
                           </div>
                         </div>
@@ -1014,24 +1048,23 @@ export default function Dashboard() {
                     })}
 
                     {processes.length === 0 && (
-                      <div className="col-span-3 text-center py-6 bg-white/[0.01] border border-dashed border-white/[0.08] rounded-2xl text-zinc-500 text-xs font-mono">
-                        No active audio streams detected. Play sound in Teams, Chrome, Zoom, or YouTube, then click "Rescan Apps".
+                      <div className="col-span-3 text-center py-6 bg-white/[0.01] border border-dashed border-white/[0.08] rounded-2xl text-zinc-500 text-xs">
+                        No audio playing. Start playback in Teams, Chrome, Zoom, or Spotify, then click Rescan Apps.
                       </div>
                     )}
                   </div>
 
-                  {/* Recording Controls Bar */}
-                  <div className="flex items-center justify-between p-4 bg-white/[0.02] border border-white/[0.06] rounded-2xl">
-                    <div className="flex items-center gap-4">
-                      {/* Live VU Amplitude Progress Bar */}
-                      <div className="w-40 h-2 bg-white/[0.06] rounded-full overflow-hidden">
+                  {/* Recording Controls */}
+                  <div className="flex items-center justify-between p-3.5 bg-white/[0.02] border border-white/[0.06] rounded-2xl">
+                    <div className="flex items-center gap-3">
+                      <div className="w-32 h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
                         <div 
-                          className="h-full bg-cyan-400 transition-all duration-100 rounded-full"
+                          className="h-full bg-white transition-all duration-100 rounded-full"
                           style={{ width: `${Math.min(100, vuLevel * 100)}%` }}
                         />
                       </div>
                       <span className="text-xs text-zinc-400 font-mono">
-                        {isRecording ? `REC: ${Math.floor(recordingSeconds / 60)}:${(recordingSeconds % 60).toString().padStart(2, '0')}` : 'Ready to capture'}
+                        {isRecording ? `REC: ${Math.floor(recordingSeconds / 60)}:${(recordingSeconds % 60).toString().padStart(2, '0')}` : 'Ready'}
                       </span>
                     </div>
 
@@ -1040,38 +1073,28 @@ export default function Dashboard() {
                         <button
                           onClick={handleStartRecording}
                           disabled={!selectedPid}
-                          className="px-5 py-2 bg-cyan-400 hover:bg-cyan-300 disabled:opacity-40 disabled:cursor-not-allowed text-black rounded-xl text-xs font-extrabold tracking-wide shadow-lg shadow-cyan-400/20 active:scale-95 transition-all flex items-center gap-2"
+                          className="px-5 py-2 bg-white hover:bg-zinc-200 disabled:opacity-30 disabled:cursor-not-allowed text-black rounded-xl text-xs font-semibold shadow-md active:scale-95 transition-all flex items-center gap-2"
                         >
                           <Mic className="w-3.5 h-3.5 text-black" />
-                          <span>START RECORDING</span>
+                          <span>Start Recording</span>
                         </button>
                       ) : (
                         <button
                           onClick={handleStopRecording}
-                          className="px-5 py-2 bg-red-600 hover:bg-red-500 text-white rounded-xl text-xs font-bold tracking-wide shadow-lg shadow-red-600/25 active:scale-95 transition-all flex items-center gap-2"
+                          className="px-5 py-2 bg-red-500 hover:bg-red-400 text-white rounded-xl text-xs font-semibold shadow-md active:scale-95 transition-all flex items-center gap-2"
                         >
-                          <Square className="w-3.5 h-3.5" />
-                          <span>STOP & SYNTHESIZE</span>
+                          <Square className="w-3.5 h-3.5 fill-current" />
+                          <span>Stop & Process</span>
                         </button>
                       )}
                     </div>
                   </div>
-
-                  {/* Collapsible Diagnostics Console */}
-                  {showDiagnostics && (
-                    <div className="mt-4 p-3 bg-black/60 border border-white/[0.06] rounded-xl font-mono text-[11px] text-zinc-400 max-h-32 overflow-y-auto space-y-1">
-                      {diagnosticLogs.map((log, i) => (
-                        <div key={i}>{log}</div>
-                      ))}
-                      {diagnosticLogs.length === 0 && <div>[INFO] No diagnostic events logged yet.</div>}
-                    </div>
-                  )}
                 </div>
               </motion.div>
             )}
           </AnimatePresence>
 
-          {/* --- TAB CONTENT AREA --- */}
+          {/* --- TAB CONTENT CANVAS --- */}
           <div className="flex-1 overflow-y-auto px-10 py-8">
             {selectedSession ? (
               <AnimatePresence mode="wait">
@@ -1100,13 +1123,13 @@ export default function Dashboard() {
                 </motion.div>
               </AnimatePresence>
             ) : (
-              <div className="flex-1 flex flex-col items-center justify-center p-8 text-center mt-20">
-                <div className="w-20 h-20 rounded-3xl bg-gradient-to-b from-white/[0.08] to-white/[0.02] border border-white/[0.08] flex items-center justify-center mb-5 shadow-2xl p-4">
-                  <Image src="/nexus-logo.svg" alt="Nexus" width={48} height={48} />
+              <div className="flex-1 flex flex-col items-center justify-center p-8 text-center mt-24">
+                <div className="w-16 h-16 rounded-3xl bg-white/[0.03] border border-white/[0.08] flex items-center justify-center mb-4 shadow-xl">
+                  <BookOpen className="w-6 h-6 text-zinc-500" />
                 </div>
-                <h3 className="text-lg font-bold text-white font-mono">No Lecture Selected</h3>
-                <p className="text-xs text-zinc-400 max-w-sm mt-2 leading-relaxed">
-                  Click <strong className="text-cyan-400">"RECORD LECTURE"</strong> at the top to record live sound from Teams, Chrome, or Zoom, or select an existing lecture from the sidebar.
+                <h3 className="text-base font-semibold text-white/90">No Lecture Selected</h3>
+                <p className="text-xs text-zinc-500 max-w-sm mt-1.5 leading-relaxed">
+                  Select a session from the sidebar or click "Record" above to begin.
                 </p>
               </div>
             )}
@@ -1123,18 +1146,18 @@ export default function Dashboard() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setShowSettings(false)}
-              className="absolute inset-0 bg-black/75 backdrop-blur-md"
+              className="absolute inset-0 bg-black/70 backdrop-blur-md"
             />
             <motion.div
-              initial={{ opacity: 0, scale: 0.94, y: 10 }}
+              initial={{ opacity: 0, scale: 0.95, y: 8 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.94, y: 10 }}
-              className="relative w-full max-w-md bg-[#0D1017] border border-white/[0.1] rounded-3xl p-6 shadow-2xl z-10 font-sans"
+              exit={{ opacity: 0, scale: 0.95, y: 8 }}
+              className="relative w-full max-w-md bg-[#0F1118] border border-white/[0.1] rounded-3xl p-6 shadow-2xl z-10"
             >
               <div className="flex items-center justify-between pb-4 border-b border-white/[0.06]">
                 <div className="flex items-center gap-2">
-                  <Folder className="w-4 h-4 text-cyan-400" />
-                  <h3 className="text-sm font-bold text-white font-mono">LOCAL STORAGE VAULT</h3>
+                  <Folder className="w-4 h-4 text-white" />
+                  <h3 className="text-sm font-semibold text-white">Local Vault Storage</h3>
                 </div>
                 <button onClick={() => setShowSettings(false)} className="text-zinc-500 hover:text-white">
                   ✕
@@ -1143,34 +1166,25 @@ export default function Dashboard() {
 
               <div className="mt-4 space-y-4 text-xs text-zinc-300">
                 <div>
-                  <label className="text-zinc-400 block mb-1 font-mono text-[11px]">Active Storage Directory:</label>
-                  <div className="p-2.5 bg-black/60 border border-white/[0.08] rounded-xl font-mono text-[11px] text-zinc-300 break-all select-all">
+                  <label className="text-zinc-500 block mb-1">Storage Path on Disk:</label>
+                  <div className="p-2.5 bg-black/40 border border-white/[0.08] rounded-xl font-mono text-[11px] text-zinc-300 break-all select-all">
                     {storageDir || 'd:\\Projects\\transcribe-edtech\\storage'}
                   </div>
                 </div>
 
                 <div className="p-3 bg-white/[0.02] border border-white/[0.06] rounded-xl space-y-1.5 text-zinc-400 text-[11px]">
-                  <div className="flex items-center gap-2">
-                    <Check className="w-3.5 h-3.5 text-cyan-400" />
-                    <span>100% Offline & Local-First (No Supabase required)</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Check className="w-3.5 h-3.5 text-cyan-400" />
-                    <span>All Markdown notes formatted for Obsidian & Notion</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Check className="w-3.5 h-3.5 text-cyan-400" />
-                    <span>Automated Anki .apkg spaced repetition exports</span>
-                  </div>
+                  <div>✓ Stored locally on disk for 100% privacy</div>
+                  <div>✓ Native Obsidian vault integration</div>
+                  <div>✓ Automated Anki .apkg packages</div>
                 </div>
               </div>
 
               <div className="mt-6 pt-4 border-t border-white/[0.06] flex justify-end">
                 <button
                   onClick={() => setShowSettings(false)}
-                  className="px-4 py-2 bg-cyan-400 hover:bg-cyan-300 text-black font-bold rounded-xl text-xs"
+                  className="px-4 py-2 bg-white text-black font-medium rounded-xl text-xs"
                 >
-                  Close Settings
+                  Done
                 </button>
               </div>
             </motion.div>
@@ -1187,22 +1201,22 @@ export default function Dashboard() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => !isDeleting && setSessionToDelete(null)}
-              className="absolute inset-0 bg-black/75 backdrop-blur-md"
+              className="absolute inset-0 bg-black/70 backdrop-blur-md"
             />
             <motion.div
-              initial={{ opacity: 0, scale: 0.94, y: 10 }}
+              initial={{ opacity: 0, scale: 0.95, y: 8 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.94, y: 10 }}
-              className="relative w-full max-w-md bg-[#0F121A] border border-white/[0.1] rounded-3xl p-6 shadow-2xl z-10"
+              exit={{ opacity: 0, scale: 0.95, y: 8 }}
+              className="relative w-full max-w-md bg-[#0F1118] border border-white/[0.1] rounded-3xl p-6 shadow-2xl z-10"
             >
               <div className="flex items-start gap-4">
-                <div className="w-11 h-11 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center flex-shrink-0">
-                  <Trash2 className="w-5 h-5 text-red-400" />
+                <div className="w-10 h-10 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center flex-shrink-0">
+                  <Trash2 className="w-4 h-4 text-red-400" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-white tracking-tight">Delete Lecture Notes?</h3>
+                  <h3 className="text-base font-semibold text-white tracking-tight">Delete Lecture?</h3>
                   <p className="text-xs text-zinc-400 mt-1.5 leading-relaxed">
-                    This action is permanent. All transcripts, study summaries, and flashcards for this lecture will be removed from your local vault.
+                    This will permanently delete this session's transcripts, notes, and study cards from your local vault.
                   </p>
                 </div>
               </div>
@@ -1211,23 +1225,16 @@ export default function Dashboard() {
                 <button
                   onClick={() => setSessionToDelete(null)}
                   disabled={isDeleting}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold text-zinc-300 hover:text-white hover:bg-white/[0.06] transition-all"
+                  className="px-4 py-2 rounded-xl text-xs font-medium text-zinc-300 hover:text-white transition-all"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={confirmDelete}
                   disabled={isDeleting}
-                  className="px-4 py-2 rounded-xl text-xs font-bold bg-red-600 hover:bg-red-500 active:scale-95 text-white transition-all shadow-lg shadow-red-600/20 flex items-center gap-1.5"
+                  className="px-4 py-2 rounded-xl text-xs font-semibold bg-red-500 hover:bg-red-400 text-white transition-all shadow-md active:scale-95"
                 >
-                  {isDeleting ? (
-                    <>
-                      <RefreshCw className="w-3 h-3 animate-spin" />
-                      <span>Deleting...</span>
-                    </>
-                  ) : (
-                    <span>Delete Permanently</span>
-                  )}
+                  {isDeleting ? 'Deleting...' : 'Delete'}
                 </button>
               </div>
             </motion.div>
@@ -1239,7 +1246,7 @@ export default function Dashboard() {
 }
 
 // ==========================================
-// EMBEDDED MINI AUDIO PLAYER COMPONENT
+// EMBEDDED APPLE GLASS AUDIO PLAYER
 // ==========================================
 function MiniAudioPlayer({ session }: { session: any }) {
   const audioRef = useRef<HTMLAudioElement>(null)
@@ -1276,58 +1283,57 @@ function MiniAudioPlayer({ session }: { session: any }) {
   }
 
   return (
-    <div className="p-3.5 bg-[#0C0F17] border border-cyan-500/25 rounded-2xl flex items-center justify-between gap-4 shadow-lg shadow-cyan-950/20">
-      <audio 
-        ref={audioRef}
-        src={audioSrc}
-        onTimeUpdate={() => setCurrentTime(audioRef.current?.currentTime || 0)}
-        onLoadedMetadata={() => setDuration(audioRef.current?.duration || 0)}
-        onEnded={() => setIsPlaying(false)}
-      />
+    <Card3D className="w-full">
+      <div className="p-4 bg-white/[0.03] backdrop-blur-2xl border border-white/[0.08] rounded-3xl flex items-center justify-between gap-4 shadow-[0_8px_32px_rgba(0,0,0,0.25)]">
+        <audio 
+          ref={audioRef}
+          src={audioSrc}
+          onTimeUpdate={() => setCurrentTime(audioRef.current?.currentTime || 0)}
+          onLoadedMetadata={() => setDuration(audioRef.current?.duration || 0)}
+          onEnded={() => setIsPlaying(false)}
+        />
 
-      <div className="flex items-center gap-3">
-        <button 
-          onClick={togglePlay}
-          className="w-8 h-8 rounded-full bg-cyan-400 hover:bg-cyan-300 text-black flex items-center justify-center font-bold shadow-md shadow-cyan-400/20 active:scale-95 transition-all"
-        >
-          {isPlaying ? <Pause className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current ml-0.5" />}
-        </button>
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={togglePlay}
+            className="w-9 h-9 rounded-full bg-white text-black flex items-center justify-center font-bold shadow-md hover:bg-zinc-200 active:scale-95 transition-all"
+          >
+            {isPlaying ? <Pause className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current ml-0.5" />}
+          </button>
 
-        <div className="text-xs">
-          <div className="font-semibold text-white flex items-center gap-1.5">
-            <Volume2 className="w-3.5 h-3.5 text-cyan-400" />
-            <span>Lecture Audio Recording</span>
-          </div>
-          <div className="text-[10px] text-zinc-500 font-mono">
-            {formatTime(currentTime)} / {formatTime(duration || 0)}
+          <div className="text-xs">
+            <div className="font-medium text-white/90">Lecture Audio</div>
+            <div className="text-[11px] text-zinc-500 font-mono">
+              {formatTime(currentTime)} / {formatTime(duration || 0)}
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Scrub Bar */}
-      <div className="flex-1 max-w-xs flex items-center gap-2">
-        <input 
-          type="range" 
-          min={0} 
-          max={duration || 100} 
-          value={currentTime} 
-          onChange={(e) => {
-            const time = Number(e.target.value)
-            setCurrentTime(time)
-            if (audioRef.current) audioRef.current.currentTime = time
-          }}
-          className="w-full h-1 bg-white/[0.08] rounded-lg appearance-none cursor-pointer accent-cyan-400"
-        />
-      </div>
+        {/* Scrub Bar */}
+        <div className="flex-1 max-w-sm flex items-center gap-2">
+          <input 
+            type="range" 
+            min={0} 
+            max={duration || 100} 
+            value={currentTime} 
+            onChange={(e) => {
+              const time = Number(e.target.value)
+              setCurrentTime(time)
+              if (audioRef.current) audioRef.current.currentTime = time
+            }}
+            className="w-full h-1 bg-white/[0.1] rounded-lg appearance-none cursor-pointer accent-white"
+          />
+        </div>
 
-      {/* Speed Multiplier Pill */}
-      <button 
-        onClick={cycleRate}
-        className="px-2.5 py-1 rounded-lg bg-white/[0.05] hover:bg-white/[0.09] text-[11px] font-mono font-bold text-cyan-300 border border-white/[0.08] active:scale-95 transition-all"
-      >
-        {playbackRate}x
-      </button>
-    </div>
+        {/* Speed Pill */}
+        <button 
+          onClick={cycleRate}
+          className="px-2.5 py-1 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] text-xs font-mono font-medium text-zinc-200 border border-white/[0.08] active:scale-95 transition-all"
+        >
+          {playbackRate}x
+        </button>
+      </div>
+    </Card3D>
   )
 }
 
@@ -1358,8 +1364,8 @@ function SummaryTab({
   return (
     <div className="max-w-4xl mx-auto space-y-8 pb-16">
       
-      {/* Session Header Card with Rename Support */}
-      <div className="flex items-center justify-between pb-4 border-b border-white/[0.06]">
+      {/* Session Title Header */}
+      <div className="flex items-center justify-between pb-3 border-b border-white/[0.06]">
         <div className="flex-1 mr-4">
           {isEditing ? (
             <div className="flex items-center gap-2">
@@ -1372,11 +1378,11 @@ function SummaryTab({
                   if (e.key === 'Escape') setEditingTitleId(null)
                 }}
                 autoFocus
-                className="text-2xl font-bold bg-white/[0.08] border border-cyan-400 rounded-xl px-3 py-1 text-white focus:outline-none w-full font-mono"
+                className="text-2xl font-semibold bg-white/[0.08] border border-white/20 rounded-xl px-3 py-1 text-white focus:outline-none w-full"
               />
               <button 
                 onClick={() => onRename(editTitleValue)}
-                className="px-3 py-1 bg-cyan-400 hover:bg-cyan-300 text-black text-xs font-bold rounded-xl"
+                className="px-3 py-1 bg-white text-black text-xs font-medium rounded-xl"
               >
                 Save
               </button>
@@ -1386,107 +1392,103 @@ function SummaryTab({
               setEditingTitleId(session.id)
               setEditTitleValue(session.title || 'Untitled Lecture')
             }}>
-              <h1 className="text-2xl font-bold tracking-tight text-white hover:text-cyan-300 transition-colors">
+              <h1 className="text-2xl font-semibold tracking-tight text-white/95 hover:text-white transition-colors">
                 {session.title || 'Untitled Lecture'}
               </h1>
               <Edit2 className="w-4 h-4 text-zinc-500 opacity-0 group-hover:opacity-100 transition-opacity" />
             </div>
           )}
 
-          <p className="text-xs text-zinc-400 mt-1 flex items-center gap-2 font-mono">
-            <Clock className="w-3.5 h-3.5 text-cyan-400" />
+          <p className="text-xs text-zinc-400 mt-1 flex items-center gap-2">
+            <Clock className="w-3.5 h-3.5 text-zinc-500" />
             <span>Recorded {new Date(session.created_at).toLocaleString([], { dateStyle: 'full', timeStyle: 'short' })}</span>
           </p>
         </div>
-
-        <div className="flex items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-cyan-400/10 text-cyan-400 border border-cyan-400/25 font-mono">
-            <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
-            Gemini 3.6 Flash
-          </span>
-        </div>
       </div>
 
-      {/* Mini Audio Player (if audio recording exists) */}
+      {/* Mini Audio Player (if recorded) */}
       <MiniAudioPlayer session={session} />
 
       {/* 1. Executive Summary */}
       <section className="space-y-3">
-        <div className="flex items-center gap-2 text-sm font-bold text-white tracking-wide font-mono">
-          <BookOpen className="w-4 h-4 text-cyan-400" />
-          <span>EXECUTIVE SUMMARY</span>
+        <div className="flex items-center gap-2 text-sm font-medium text-zinc-300">
+          <BookOpen className="w-4 h-4 text-zinc-400" />
+          <span>Executive Summary</span>
         </div>
-        <div className="bg-white/[0.02] border border-white/[0.07] rounded-3xl p-6 shadow-sm shadow-black/30 text-sm leading-relaxed text-zinc-300 prose prose-invert max-w-none prose-p:my-2 prose-headings:text-white prose-headings:font-mono">
-          <ReactMarkdown>{session.summary || 'No summary available.'}</ReactMarkdown>
-        </div>
+        <Card3D>
+          <div className="bg-white/[0.025] backdrop-blur-2xl border border-white/[0.08] rounded-3xl p-7 shadow-[0_8px_32px_rgba(0,0,0,0.25)] text-sm leading-relaxed text-zinc-300 prose prose-invert max-w-none prose-p:my-2 prose-headings:text-white">
+            <ReactMarkdown>{session.summary || 'No summary available.'}</ReactMarkdown>
+          </div>
+        </Card3D>
       </section>
 
       {/* 2. Action Items & Takeaways */}
       {actionItems.length > 0 && (
         <section className="space-y-3">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-sm font-bold text-white tracking-wide font-mono">
-              <CheckCircle2 className="w-4 h-4 text-amber-400" />
-              <span>KEY TAKEAWAYS & ACTION ITEMS</span>
+            <div className="flex items-center gap-2 text-sm font-medium text-zinc-300">
+              <CheckCircle2 className="w-4 h-4 text-zinc-400" />
+              <span>Key Takeaways & Action Items</span>
             </div>
-            <span className="text-[11px] text-zinc-500 font-mono">Click item to check off</span>
+            <span className="text-[11px] text-zinc-500">Click item to check off</span>
           </div>
-          <div className="bg-white/[0.02] border border-white/[0.07] rounded-3xl p-5 space-y-2 shadow-sm">
-            {actionItems.map((item: string, i: number) => {
-              const isChecked = !!completedItems[i]
-              return (
-                <div 
-                  key={i}
-                  onClick={() => toggleItem(i)}
-                  className={`flex items-start gap-3 p-2.5 rounded-2xl cursor-pointer transition-all ${
-                    isChecked ? 'bg-white/[0.01] opacity-50' : 'hover:bg-white/[0.03]'
-                  }`}
-                >
-                  <button className="mt-0.5 text-zinc-500 hover:text-cyan-400 transition-colors">
-                    {isChecked ? (
-                      <CheckCircle2 className="w-4 h-4 text-cyan-400" />
-                    ) : (
-                      <Circle className="w-4 h-4 text-zinc-500" />
-                    )}
-                  </button>
-                  <span className={`text-xs leading-relaxed ${isChecked ? 'line-through text-zinc-500' : 'text-zinc-200'}`}>
-                    {item}
-                  </span>
-                </div>
-              )
-            })}
-          </div>
+          <Card3D>
+            <div className="bg-white/[0.025] backdrop-blur-2xl border border-white/[0.08] rounded-3xl p-6 space-y-2 shadow-[0_8px_32px_rgba(0,0,0,0.25)]">
+              {actionItems.map((item: string, i: number) => {
+                const isChecked = !!completedItems[i]
+                return (
+                  <div 
+                    key={i}
+                    onClick={() => toggleItem(i)}
+                    className={`flex items-start gap-3 p-2.5 rounded-2xl cursor-pointer transition-all ${
+                      isChecked ? 'bg-white/[0.01] opacity-40' : 'hover:bg-white/[0.03]'
+                    }`}
+                  >
+                    <button className="mt-0.5 text-zinc-500 hover:text-white transition-colors">
+                      {isChecked ? (
+                        <CheckCircle2 className="w-4 h-4 text-white" />
+                      ) : (
+                        <Circle className="w-4 h-4 text-zinc-500" />
+                      )}
+                    </button>
+                    <span className={`text-xs leading-relaxed ${isChecked ? 'line-through text-zinc-500' : 'text-zinc-200'}`}>
+                      {item}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          </Card3D>
         </section>
       )}
 
-      {/* 3. Structured Course Outline */}
+      {/* 3. Structured Course Modules */}
       {outline.length > 0 && (
         <section className="space-y-3">
-          <div className="flex items-center gap-2 text-sm font-bold text-white tracking-wide font-mono">
-            <Layout className="w-4 h-4 text-emerald-400" />
-            <span>STRUCTURED COURSE MODULES</span>
+          <div className="flex items-center gap-2 text-sm font-medium text-zinc-300">
+            <Layout className="w-4 h-4 text-zinc-400" />
+            <span>Course Modules</span>
           </div>
           <div className="grid gap-3.5">
             {outline.map((section: any, i: number) => (
-              <div 
-                key={i} 
-                className="bg-white/[0.02] border border-white/[0.07] rounded-2xl p-5 shadow-sm hover:border-cyan-500/20 transition-all"
-              >
-                <div className="flex items-center gap-2.5 mb-3">
-                  <span className="font-mono text-[10px] font-bold text-cyan-400 bg-cyan-400/10 border border-cyan-400/20 px-2 py-0.5 rounded-md">
-                    MODULE {String(i + 1).padStart(2, '0')}
-                  </span>
-                  <h4 className="text-sm font-bold text-white tracking-tight">{section.title}</h4>
+              <Card3D key={i}>
+                <div className="bg-white/[0.025] backdrop-blur-2xl border border-white/[0.08] rounded-3xl p-6 shadow-[0_8px_32px_rgba(0,0,0,0.25)]">
+                  <div className="flex items-center gap-2.5 mb-3">
+                    <span className="text-[10px] font-semibold text-zinc-300 bg-white/[0.06] border border-white/[0.08] px-2.5 py-0.5 rounded-full font-mono">
+                      Module {String(i + 1).padStart(2, '0')}
+                    </span>
+                    <h4 className="text-sm font-medium text-white tracking-tight">{section.title}</h4>
+                  </div>
+                  <ul className="space-y-1.5 pl-2">
+                    {section.bullet_points?.map((pt: string, j: number) => (
+                      <li key={j} className="flex items-start gap-2.5 text-xs text-zinc-300 leading-relaxed">
+                        <span className="text-zinc-500 mt-0.5">•</span>
+                        <span>{pt}</span>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
-                <ul className="space-y-1.5 pl-2">
-                  {section.bullet_points?.map((pt: string, j: number) => (
-                    <li key={j} className="flex items-start gap-2.5 text-xs text-zinc-300 leading-relaxed">
-                      <span className="text-cyan-400 mt-0.5">•</span>
-                      <span>{pt}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
+              </Card3D>
             ))}
           </div>
         </section>
@@ -1495,19 +1497,18 @@ function SummaryTab({
       {/* 4. Glossary of Terms */}
       {glossary.length > 0 && (
         <section className="space-y-3">
-          <div className="flex items-center gap-2 text-sm font-bold text-white tracking-wide font-mono">
-            <HelpCircle className="w-4 h-4 text-purple-400" />
-            <span>KEY TERMINOLOGY & GLOSSARY</span>
+          <div className="flex items-center gap-2 text-sm font-medium text-zinc-300">
+            <HelpCircle className="w-4 h-4 text-zinc-400" />
+            <span>Terminology & Concepts</span>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {glossary.map((g: any, i: number) => (
-              <div 
-                key={i} 
-                className="bg-white/[0.02] border border-white/[0.07] rounded-2xl p-4 hover:border-purple-500/30 transition-all"
-              >
-                <div className="font-bold text-xs text-purple-300 font-mono mb-1">{g.term}</div>
-                <p className="text-xs text-zinc-400 leading-relaxed">{g.definition}</p>
-              </div>
+              <Card3D key={i}>
+                <div className="bg-white/[0.025] backdrop-blur-2xl border border-white/[0.08] rounded-2xl p-5 h-full">
+                  <div className="font-semibold text-xs text-white mb-1">{g.term}</div>
+                  <p className="text-xs text-zinc-400 leading-relaxed">{g.definition}</p>
+                </div>
+              </Card3D>
             ))}
           </div>
         </section>
@@ -1545,7 +1546,7 @@ function FlashcardsTab({ session }: { session: any }) {
     return (
       <div className="h-full flex flex-col items-center justify-center text-center p-8">
         <Layers className="w-12 h-12 text-zinc-600 mb-3" />
-        <h3 className="text-sm font-semibold text-zinc-300">No Flashcards Available</h3>
+        <h3 className="text-sm font-medium text-zinc-300">No Flashcards Available</h3>
       </div>
     )
   }
@@ -1574,13 +1575,13 @@ function FlashcardsTab({ session }: { session: any }) {
       
       {/* Top Header & Progress */}
       <div className="w-full mb-6">
-        <div className="flex items-center justify-between text-xs font-mono font-bold text-zinc-400 mb-2">
-          <span>CARD {currentIndex + 1} OF {cards.length}</span>
-          <span className="text-[11px] text-zinc-500 font-sans">Space to flip • Arrow keys to navigate</span>
+        <div className="flex items-center justify-between text-xs font-medium text-zinc-400 mb-2">
+          <span>Card {currentIndex + 1} of {cards.length}</span>
+          <span className="text-[11px] text-zinc-500">Space to flip • Arrow keys to navigate</span>
         </div>
-        <div className="w-full h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
+        <div className="w-full h-1 bg-white/[0.08] rounded-full overflow-hidden">
           <motion.div 
-            className="h-full bg-gradient-to-r from-cyan-400 to-blue-500 rounded-full"
+            className="h-full bg-white rounded-full"
             initial={{ width: 0 }}
             animate={{ width: `${progressPercent}%` }}
             transition={{ ease: "easeOut", duration: 0.3 }}
@@ -1599,14 +1600,14 @@ function FlashcardsTab({ session }: { session: any }) {
           transition={{ duration: 0.5, type: "spring", stiffness: 260, damping: 24 }}
         >
           {/* FRONT: QUESTION */}
-          <div className="absolute inset-0 w-full h-full [backface-visibility:hidden] bg-gradient-to-b from-[#11141C] to-[#0A0D14] border border-white/[0.1] rounded-3xl p-8 flex flex-col justify-between shadow-2xl shadow-black/50">
+          <div className="absolute inset-0 w-full h-full [backface-visibility:hidden] bg-white/[0.03] backdrop-blur-3xl border border-white/[0.12] rounded-3xl p-8 flex flex-col justify-between shadow-[0_16px_40px_rgba(0,0,0,0.4)]">
             <div className="flex items-center justify-between">
-              <span className="text-[10px] uppercase font-mono font-extrabold tracking-widest px-2.5 py-0.5 rounded-full bg-cyan-400/10 text-cyan-400 border border-cyan-400/25">
+              <span className="text-[10px] uppercase font-mono font-medium tracking-wider px-2.5 py-0.5 rounded-full bg-white/[0.08] text-zinc-300 border border-white/[0.1]">
                 Question
               </span>
               <button 
                 onClick={markMastered}
-                className={`text-[11px] font-mono flex items-center gap-1 px-2.5 py-0.5 rounded-full border transition-all ${
+                className={`text-[11px] flex items-center gap-1 px-2.5 py-0.5 rounded-full border transition-all ${
                   isMastered ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'text-zinc-500 border-white/[0.06] hover:text-zinc-300'
                 }`}
               >
@@ -1616,7 +1617,7 @@ function FlashcardsTab({ session }: { session: any }) {
             </div>
             
             <div className="my-auto text-center px-4">
-              <h3 className="text-xl font-semibold tracking-tight text-white leading-snug">
+              <h3 className="text-xl font-medium tracking-tight text-white leading-snug">
                 {currentCard.front}
               </h3>
             </div>
@@ -1624,19 +1625,19 @@ function FlashcardsTab({ session }: { session: any }) {
             <div className="flex items-center justify-between text-[11px] text-zinc-500 font-mono">
               <span>Card {currentIndex + 1} / {cards.length}</span>
               <span className="flex items-center gap-1 text-zinc-400">
-                <RotateCw className="w-3 h-3" /> Tap to flip
+                <RotateCw className="w-3 h-3" /> Click to flip
               </span>
             </div>
           </div>
 
           {/* BACK: ANSWER */}
-          <div className="absolute inset-0 w-full h-full [backface-visibility:hidden] [transform:rotateY(180deg)] bg-gradient-to-b from-[#0F1626] to-[#080D18] border border-cyan-400/35 rounded-3xl p-8 flex flex-col justify-between shadow-2xl shadow-cyan-950/25">
+          <div className="absolute inset-0 w-full h-full [backface-visibility:hidden] [transform:rotateY(180deg)] bg-white/[0.05] backdrop-blur-3xl border border-white/[0.16] rounded-3xl p-8 flex flex-col justify-between shadow-[0_16px_40px_rgba(0,0,0,0.4)]">
             <div className="flex items-center justify-between">
-              <span className="text-[10px] uppercase font-mono font-extrabold tracking-widest px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                Model Answer
+              <span className="text-[10px] uppercase font-mono font-medium tracking-wider px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">
+                Answer
               </span>
-              <span className="text-[11px] text-zinc-500 flex items-center gap-1 font-mono">
-                <RotateCw className="w-3 h-3" /> Tap to flip
+              <span className="text-[11px] text-zinc-500 flex items-center gap-1">
+                <RotateCw className="w-3 h-3" /> Click to flip
               </span>
             </div>
 
@@ -1647,7 +1648,7 @@ function FlashcardsTab({ session }: { session: any }) {
             </div>
 
             <div className="text-center text-[11px] text-zinc-500 font-mono">
-              Recall Verification
+              Active Recall
             </div>
           </div>
         </motion.div>
@@ -1664,9 +1665,9 @@ function FlashcardsTab({ session }: { session: any }) {
 
         <button 
           onClick={() => setIsFlipped(!isFlipped)}
-          className="px-6 py-2.5 rounded-2xl bg-cyan-400 hover:bg-cyan-300 active:scale-95 text-xs font-bold text-black transition-all shadow-md shadow-cyan-400/20 font-mono"
+          className="px-6 py-2.5 rounded-2xl bg-white hover:bg-zinc-200 active:scale-95 text-xs font-semibold text-black transition-all shadow-md"
         >
-          FLIP CARD
+          Flip Card
         </button>
 
         <button 
@@ -1692,7 +1693,7 @@ function QuizTab({ session }: { session: any }) {
     return (
       <div className="h-full flex flex-col items-center justify-center text-center p-8">
         <GraduationCap className="w-12 h-12 text-zinc-600 mb-3" />
-        <h3 className="text-sm font-semibold text-zinc-300">No Quiz Items Available</h3>
+        <h3 className="text-sm font-medium text-zinc-300">No Quiz Items Available</h3>
       </div>
     )
   }
@@ -1700,45 +1701,47 @@ function QuizTab({ session }: { session: any }) {
   return (
     <div className="max-w-3xl mx-auto space-y-6 pb-16">
       <div className="border-b border-white/[0.06] pb-4">
-        <h2 className="text-xl font-bold tracking-tight text-white flex items-center gap-2 font-mono">
-          <GraduationCap className="w-5 h-5 text-cyan-400" />
-          LECTURE MASTERY QUIZ
+        <h2 className="text-xl font-semibold tracking-tight text-white flex items-center gap-2">
+          <GraduationCap className="w-5 h-5 text-zinc-300" />
+          Practice Quiz
         </h2>
-        <p className="text-xs text-zinc-400 mt-1">Test your recall of key concepts from this session.</p>
+        <p className="text-xs text-zinc-400 mt-1">Self-test your knowledge of key lecture concepts.</p>
       </div>
 
       <div className="space-y-4">
         {cards.map((card: any, idx: number) => {
           const isAnswerShown = !!revealed[idx]
           return (
-            <div key={idx} className="bg-white/[0.02] border border-white/[0.08] rounded-2xl p-6 transition-all hover:border-cyan-500/30">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <span className="font-mono text-[10px] uppercase font-bold text-cyan-400 bg-cyan-400/10 border border-cyan-400/20 px-2 py-0.5 rounded">
-                    QUESTION {idx + 1}
-                  </span>
-                  <h4 className="text-sm font-semibold text-white mt-2 leading-relaxed">{card.front}</h4>
+            <Card3D key={idx}>
+              <div className="bg-white/[0.025] backdrop-blur-2xl border border-white/[0.08] rounded-3xl p-6 transition-all shadow-[0_8px_30px_rgba(0,0,0,0.2)]">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <span className="font-mono text-[10px] font-semibold text-zinc-400 bg-white/[0.06] border border-white/[0.08] px-2.5 py-0.5 rounded-full">
+                      Question {idx + 1}
+                    </span>
+                    <h4 className="text-sm font-medium text-white mt-2 leading-relaxed">{card.front}</h4>
+                  </div>
+
+                  <button
+                    onClick={() => setRevealed(prev => ({ ...prev, [idx]: !prev[idx] }))}
+                    className="flex-shrink-0 px-3.5 py-1.5 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] text-xs font-medium text-zinc-200 border border-white/[0.08] transition-all active:scale-95"
+                  >
+                    {isAnswerShown ? 'Hide Answer' : 'Reveal Answer'}
+                  </button>
                 </div>
 
-                <button
-                  onClick={() => setRevealed(prev => ({ ...prev, [idx]: !prev[idx] }))}
-                  className="flex-shrink-0 px-3.5 py-1.5 rounded-xl bg-white/[0.05] hover:bg-white/[0.09] text-xs font-bold text-zinc-200 border border-white/[0.08] transition-all font-mono active:scale-95"
-                >
-                  {isAnswerShown ? 'Hide Answer' : 'Reveal Answer'}
-                </button>
+                {isAnswerShown && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    className="mt-4 pt-4 border-t border-white/[0.06] text-xs leading-relaxed text-zinc-200 bg-white/[0.02] rounded-2xl p-4 border border-white/[0.06]"
+                  >
+                    <span className="font-semibold text-[10px] uppercase block mb-1 text-emerald-400 font-mono">Model Solution:</span>
+                    {card.back}
+                  </motion.div>
+                )}
               </div>
-
-              {isAnswerShown && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  className="mt-4 pt-4 border-t border-white/[0.06] text-xs leading-relaxed text-emerald-300 bg-emerald-950/20 rounded-2xl p-4 border border-emerald-500/20"
-                >
-                  <span className="font-bold text-[10px] uppercase block mb-1 text-emerald-400 font-mono">Model Solution:</span>
-                  {card.back}
-                </motion.div>
-              )}
-            </div>
+            </Card3D>
           )
         })}
       </div>
@@ -1752,11 +1755,10 @@ function QuizTab({ session }: { session: any }) {
 function TranscriptTab({ session, showToast }: { session: any, showToast: any }) {
   const text = session.raw_transcript || ''
   const wordCount = useMemo(() => text.split(/\s+/).filter(Boolean).length, [text])
-  const [filterQuery, setFilterQuery] = useState('')
 
   const copyTranscript = () => {
     navigator.clipboard.writeText(text)
-    showToast("Full transcript copied to clipboard.", "success")
+    showToast("Transcript copied to clipboard", "success")
   }
 
   const downloadText = () => {
@@ -1767,39 +1769,39 @@ function TranscriptTab({ session, showToast }: { session: any, showToast: any })
     link.download = `transcript_${new Date(session.created_at).toISOString().slice(0, 10)}.txt`
     link.click()
     URL.revokeObjectURL(url)
-    showToast("Transcript downloaded as text file.", "success")
+    showToast("Transcript downloaded as text file", "success")
   }
 
   return (
     <div className="max-w-4xl mx-auto h-full flex flex-col pb-12">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2 text-xs text-zinc-400">
-          <span className="font-mono bg-white/[0.04] px-2 py-0.5 rounded border border-white/[0.06]">
+          <span className="bg-white/[0.04] px-2.5 py-0.5 rounded-full border border-white/[0.06]">
             {wordCount} words
           </span>
           <span>•</span>
-          <span className="font-mono">~{Math.ceil(wordCount / 150)} min speaking time</span>
+          <span>~{Math.ceil(wordCount / 150)} min speaking time</span>
         </div>
 
         <div className="flex items-center gap-2">
           <button
             onClick={downloadText}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-xs font-semibold text-zinc-200 active:scale-95 transition-all"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-xs font-medium text-zinc-200 active:scale-95 transition-all"
           >
             <FileDown className="w-3.5 h-3.5 text-zinc-400" />
             <span>Download .txt</span>
           </button>
           <button
             onClick={copyTranscript}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-xs font-semibold text-zinc-200 active:scale-95 transition-all"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-xs font-medium text-zinc-200 active:scale-95 transition-all"
           >
-            <Copy className="w-3.5 h-3.5 text-cyan-400" />
+            <Copy className="w-3.5 h-3.5 text-zinc-300" />
             <span>Copy All</span>
           </button>
         </div>
       </div>
 
-      <div className="bg-white/[0.02] border border-white/[0.07] rounded-3xl p-7 flex-1 overflow-y-auto leading-relaxed font-sans text-sm text-zinc-300 whitespace-pre-wrap select-text">
+      <div className="bg-white/[0.025] backdrop-blur-2xl border border-white/[0.08] rounded-3xl p-7 flex-1 overflow-y-auto leading-relaxed font-sans text-sm text-zinc-300 whitespace-pre-wrap select-text shadow-[0_8px_32px_rgba(0,0,0,0.25)]">
         {text || 'No transcript text available for this session.'}
       </div>
     </div>
@@ -1888,18 +1890,18 @@ function ChatTab({ session, showToast }: { session: any, showToast: any }) {
   ]
 
   return (
-    <div className="max-w-3xl mx-auto h-[calc(100vh-170px)] flex flex-col bg-white/[0.02] border border-white/[0.07] rounded-3xl overflow-hidden shadow-2xl">
+    <div className="max-w-3xl mx-auto h-[calc(100vh-140px)] flex flex-col bg-white/[0.025] backdrop-blur-3xl border border-white/[0.08] rounded-3xl overflow-hidden shadow-2xl">
       
-      {/* Chat Messages Log */}
+      {/* Chat Messages */}
       <div className="flex-1 overflow-y-auto p-6 space-y-4">
         {messages.length === 0 && (
           <div className="h-full flex flex-col items-center justify-center text-center p-6">
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-cyan-400/20 to-blue-500/20 border border-cyan-400/30 flex items-center justify-center mb-3">
-              <Sparkles className="w-7 h-7 text-cyan-400" />
+            <div className="w-12 h-12 rounded-2xl bg-white/[0.05] border border-white/[0.08] flex items-center justify-center mb-3">
+              <MessageSquare className="w-5 h-5 text-white" />
             </div>
-            <h4 className="text-base font-bold text-white font-mono">Ask your Study Assistant</h4>
+            <h4 className="text-base font-medium text-white">Study Assistant</h4>
             <p className="text-xs text-zinc-400 max-w-xs mt-1 leading-relaxed">
-              Powered by Gemini 3.6 Flash. Grounded exclusively on your lecture transcript with instant token streaming.
+              Grounded on your lecture transcript with instant token streaming.
             </p>
 
             {/* Suggestions Chips */}
@@ -1908,7 +1910,7 @@ function ChatTab({ session, showToast }: { session: any, showToast: any }) {
                 <button
                   key={idx}
                   onClick={() => handleSend(s)}
-                  className="p-3 text-left text-xs bg-white/[0.03] hover:bg-cyan-400/10 hover:border-cyan-400/30 border border-white/[0.06] rounded-2xl text-zinc-300 transition-all active:scale-95 leading-tight"
+                  className="p-3 text-left text-xs bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] rounded-2xl text-zinc-300 transition-all active:scale-95 leading-tight"
                 >
                   {s}
                 </button>
@@ -1921,7 +1923,7 @@ function ChatTab({ session, showToast }: { session: any, showToast: any }) {
           <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             <div className={`max-w-[85%] rounded-2xl px-5 py-3.5 text-xs leading-relaxed ${
               m.role === 'user'
-                ? 'bg-cyan-400 text-black font-medium shadow-md shadow-cyan-400/20 rounded-br-sm'
+                ? 'bg-white text-black font-medium shadow-md rounded-br-sm'
                 : 'bg-white/[0.05] text-zinc-200 border border-white/[0.08] shadow-sm rounded-bl-sm'
             }`}>
               {m.role === 'assistant' ? (
@@ -1938,20 +1940,20 @@ function ChatTab({ session, showToast }: { session: any, showToast: any }) {
         {isLoading && messages[messages.length - 1]?.content === '' && (
           <div className="flex justify-start">
             <div className="bg-white/[0.05] border border-white/[0.08] rounded-2xl px-4 py-3 flex items-center gap-1.5">
-              <div className="w-1.5 h-1.5 bg-cyan-400 rounded-full animate-bounce"></div>
-              <div className="w-1.5 h-1.5 bg-cyan-400 rounded-full animate-bounce delay-100"></div>
-              <div className="w-1.5 h-1.5 bg-cyan-400 rounded-full animate-bounce delay-200"></div>
+              <div className="w-1.5 h-1.5 bg-white rounded-full animate-bounce"></div>
+              <div className="w-1.5 h-1.5 bg-white rounded-full animate-bounce delay-100"></div>
+              <div className="w-1.5 h-1.5 bg-white rounded-full animate-bounce delay-200"></div>
             </div>
           </div>
         )}
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input Pill */}
-      <div className="p-4 bg-[#07090F]/90 backdrop-blur-xl border-t border-white/[0.06]">
+      {/* Input Field */}
+      <div className="p-4 bg-[#07090F]/80 backdrop-blur-xl border-t border-white/[0.06]">
         <form 
           onSubmit={(e) => { e.preventDefault(); handleSend(); }} 
-          className="flex items-center gap-2 bg-white/[0.05] border border-white/[0.08] rounded-2xl px-4 py-2 focus-within:border-cyan-400/50 focus-within:bg-white/[0.07] transition-all"
+          className="flex items-center gap-2 bg-white/[0.05] border border-white/[0.08] rounded-2xl px-4 py-2 focus-within:border-white/25 focus-within:bg-white/[0.07] transition-all"
         >
           <input
             value={input}
@@ -1963,9 +1965,9 @@ function ChatTab({ session, showToast }: { session: any, showToast: any }) {
           <button
             type="submit"
             disabled={isLoading || !input.trim()}
-            className="w-8 h-8 rounded-xl bg-cyan-400 hover:bg-cyan-300 disabled:opacity-30 disabled:cursor-not-allowed text-black flex items-center justify-center transition-all active:scale-95 shadow-sm"
+            className="w-8 h-8 rounded-xl bg-white hover:bg-zinc-200 disabled:opacity-30 disabled:cursor-not-allowed text-black flex items-center justify-center transition-all active:scale-95 shadow-sm"
           >
-            <SendHorizontal className="w-4 h-4" />
+            <SendHorizontal className="w-4 h-4 text-black" />
           </button>
         </form>
       </div>

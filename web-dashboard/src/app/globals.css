@@ -2,8 +2,8 @@
 @plugin "@tailwindcss/typography";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #07080b;
+  --foreground: #f3f4f6;
 }
 
 @theme inline {
@@ -13,18 +13,33 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+/* Hide default cursor on desktop when using the custom cursor */
+@media (min-width: 768px) {
+  *, *::before, *::after,
+  html, body, a, button, input, textarea, select, [role="button"] {
+    cursor: none !important;
   }
 }
 
 body {
-  background: #090a0f;
+  background: #07080b;
   color: #f3f4f6;
   font-family: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", Roboto, sans-serif;
   overflow: hidden;
+}
+
+/* Hide Next.js Development Indicator & issue badges in bottom left */
+nextjs-portal,
+#nextjs-dev-indicator,
+[data-nextjs-dev-indicator],
+[data-nextjs-toast],
+div[data-nextjs-dialog-overlay],
+div[data-nextjs-toast-wrapper],
+.__next-dev-overlay {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
 }
 
 /* Apple-style custom dark scrollbar */
@@ -36,14 +51,14 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.1);
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.22);
 }
 
 ::selection {
-  background: rgba(59, 130, 246, 0.35);
+  background: rgba(255, 255, 255, 0.2);
   color: #ffffff;
 }
