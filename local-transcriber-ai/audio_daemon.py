@@ -13,6 +13,7 @@ import datetime
 import threading
 import subprocess
 import numpy as np
+import ctypes
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 try:
@@ -52,6 +53,11 @@ def get_audio_processes():
     # 1. Primary: Audio Sessions from Windows Core Audio (PyCaw)
     if PYCAW_AVAILABLE:
         try:
+            try:
+                ctypes.windll.ole32.CoInitialize(None)
+            except Exception:
+                pass
+
             sessions = AudioUtilities.GetAllSessions()
             for s in sessions:
                 if not s.Process or s.Process.pid in seen:
