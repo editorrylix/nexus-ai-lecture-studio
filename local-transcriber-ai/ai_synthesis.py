@@ -185,7 +185,7 @@ def save_session_local(synthesis: MeetingSynthesis, audio_path: str = None) -> d
     return session_obj
 
 if __name__ == "__main__":
-    audio_file = get_latest_audio()
+    audio_file = sys.argv[1] if len(sys.argv) > 1 and os.path.exists(sys.argv[1]) else get_latest_audio()
     if audio_file:
         try:
             synthesis = process_audio(audio_file)

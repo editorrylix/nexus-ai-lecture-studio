@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#090B10"/>
+      <stop offset="100%" stop-color="#040507"/>
+    </linearGradient>
+    <linearGradient id="cyanGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#22D3EE"/>
+      <stop offset="50%" stop-color="#38BDF8"/>
+      <stop offset="100%" stop-color="#818CF8"/>
+    </linearGradient>
+    <linearGradient id="glowGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#22D3EE" stop-opacity="0.8"/>
+      <stop offset="100%" stop-color="#6366F1" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="neonGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="12" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+  </defs>
+
+  <!-- Base Rounded Squircle -->
+  <rect x="24" y="24" width="464" height="464" rx="112" fill="url(#bgGrad)" stroke="#22D3EE" stroke-width="6" stroke-opacity="0.25"/>
+
+  <!-- Subtle grid lines in background -->
+  <path d="M24 160 H488 M24 256 H488 M24 352 H488" stroke="#ffffff" stroke-opacity="0.04" stroke-width="2"/>
+  <path d="M160 24 V488 M256 24 V488 M352 24 V488" stroke="#ffffff" stroke-opacity="0.04" stroke-width="2"/>
+
+  <!-- Ambient Glow Behind Symbol -->
+  <circle cx="256" cy="256" r="140" fill="url(#glowGrad)" opacity="0.2"/>
+
+  <!-- Iconic 'N' Waveform & Lightning Bolt -->
+  <g filter="url(#neonGlow)">
+    <!-- Left Vertical Pillar -->
+    <path d="M 148 376 V 152 C 148 140 158 132 170 136 L 194 144 C 202 146 208 154 208 162 V 376 C 208 386 198 392 188 388 L 164 380 C 154 376 148 384 148 376 Z" fill="url(#cyanGrad)"/>
+
+    <!-- Dynamic Diagonal Energy Strike -->
+    <path d="M 194 152 L 318 360 C 324 370 338 372 346 364 L 364 346 C 374 336 370 320 358 314 L 234 106 C 228 96 214 94 206 102 L 188 120 C 178 130 182 146 194 152 Z" fill="#38BDF8"/>
+
+    <!-- Right Vertical Pillar -->
+    <path d="M 304 136 V 360 C 304 372 314 380 326 376 L 350 368 C 358 366 364 358 364 350 V 136 C 364 126 354 120 344 124 L 320 132 C 310 136 304 128 304 136 Z" fill="url(#cyanGrad)"/>
+
+    <!-- Audio Frequency Pulse Dots -->
+    <circle cx="256" cy="256" r="12" fill="#22D3EE"/>
+    <circle cx="100" cy="256" r="8" fill="#22D3EE" opacity="0.6"/>
+    <circle cx="412" cy="256" r="8" fill="#818CF8" opacity="0.6"/>
+  </g>
+</svg>
