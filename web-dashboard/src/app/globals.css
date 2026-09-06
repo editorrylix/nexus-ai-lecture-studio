@@ -62,3 +62,38 @@ div[data-nextjs-toast-wrapper],
   background: rgba(255, 255, 255, 0.2);
   color: #ffffff;
 }
+
+/* Printable PDF & Study Sheet Output */
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    overflow: visible !important;
+  }
+
+  aside, header, nav, button, input, .no-print, [role="button"] {
+    display: none !important;
+  }
+
+  main {
+    overflow: visible !important;
+    background: transparent !important;
+    padding: 0 !important;
+  }
+
+  * {
+    color: #111827 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    border-color: #e5e7eb !important;
+  }
+
+  h1, h2, h3, h4 {
+    color: #000000 !important;
+    page-break-after: avoid;
+  }
+
+  .prose {
+    color: #111827 !important;
+  }
+}

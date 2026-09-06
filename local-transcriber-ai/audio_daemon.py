@@ -47,8 +47,14 @@ csharp_process = None
 recording_thread = None
 
 def get_audio_processes():
-    results = []
-    seen = set()
+    results = [{
+        "pid": 0,
+        "name": "Entire System Audio (All Apps & Meetings)",
+        "title": "Entire System Audio (All Apps & Meetings)",
+        "appType": "system",
+        "isActive": True
+    }]
+    seen = {0}
 
     # 1. Primary: Audio Sessions from Windows Core Audio (PyCaw)
     if PYCAW_AVAILABLE:
@@ -401,7 +407,7 @@ class DaemonHandler(BaseHTTPRequestHandler):
         if self.path == '/record/start':
             pid = body.get('pid')
             app_name = body.get('name', '')
-            if not pid:
+            if pid is None:
                 self._send_json({"error": "Missing pid"}, status=400)
                 return
             ok, msg = start_capture(int(pid), app_name)
@@ -414,8 +420,29 @@ class DaemonHandler(BaseHTTPRequestHandler):
         else:
             self._send_json({"error": "Endpoint not found"}, status=404)
 
+def cleanup_stale_port(port):
+    try:
+        current_pid = os.getpid()
+        for conn in psutil.net_connections(kind='inet'):
+            if conn.laddr and conn.laddr.port == port and conn.pid and conn.pid != current_pid:
+                try:
+                    p = psutil.Process(conn.pid)
+                    p.kill()
+                    time.sleep(0.3)
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
 def run():
-    server = ThreadingHTTPServer(('127.0.0.1', PORT), DaemonHandler)
+    cleanup_stale_port(PORT)
+    try:
+        server = ThreadingHTTPServer(('127.0.0.1', PORT), DaemonHandler)
+    except OSError:
+        time.sleep(0.5)
+        cleanup_stale_port(PORT)
+        server = ThreadingHTTPServer(('127.0.0.1', PORT), DaemonHandler)
+
     print(f"[DAEMON] Nexus Audio Controller Daemon active on http://127.0.0.1:{PORT}")
     try:
         server.serve_forever()

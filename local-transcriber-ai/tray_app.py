@@ -77,9 +77,11 @@ def ensure_nextjs_running():
 
     try:
         CREATE_NO_WINDOW = 0x08000000
-        # Use production start for 0% CPU consumption
+        # If production build exists, use start; otherwise fallback to dev
+        has_build = (WEB_DIR / ".next").exists()
+        cmd = ["npm.cmd", "run", "start"] if has_build else ["npm.cmd", "run", "dev"]
         next_process = subprocess.Popen(
-            ["npm.cmd", "run", "start"],
+            cmd,
             cwd=str(WEB_DIR),
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
@@ -192,9 +194,12 @@ def main():
     # 4. Start background icon updater
     threading.Thread(target=status_icon_updater, args=(tray_icon,), daemon=True).start()
 
-    # 5. Open browser once on initial launch
+    # 5. Open browser once web studio is responsive
     def delayed_open():
-        time.sleep(1.5)
+        for _ in range(30):
+            if is_url_responding("http://localhost:3000"):
+                break
+            time.sleep(0.5)
         open_web_studio()
 
     threading.Thread(target=delayed_open, daemon=True).start()

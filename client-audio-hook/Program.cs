@@ -17,6 +17,7 @@ namespace ClientAudioHook
             {
                 var procs = GetValidProcesses();
                 var items = new System.Collections.Generic.List<string>();
+                items.Add("{\"pid\":0,\"name\":\"Entire System Audio (All Apps & Meetings)\",\"title\":\"Entire System Audio (All Apps & Meetings)\"}");
                 foreach (var p in procs)
                 {
                     string title = !string.IsNullOrEmpty(p.MainWindowTitle) ? p.MainWindowTitle : p.ProcessName;
@@ -36,12 +37,35 @@ namespace ClientAudioHook
 
             if (isHeadless)
             {
-                Console.WriteLine($"[HEADLESS] Starting capture for PID: {selectedPid}");
-                var headlessCapture = new ProcessAudioCapture(selectedPid);
-                if (!headlessCapture.Start())
+                IAudioCapturer capturer;
+                if (selectedPid == 0)
                 {
-                    Console.WriteLine($"[ERROR] Failed to start audio capture for PID {selectedPid}. Make sure the app is actively playing audio.");
-                    return;
+                    Console.WriteLine("[HEADLESS] Starting Master System Audio Loopback (All Apps & Meetings)...");
+                    capturer = new MasterAudioCapture();
+                }
+                else
+                {
+                    Console.WriteLine($"[HEADLESS] Starting Process Loopback for PID: {selectedPid}...");
+                    capturer = new ProcessAudioCapture(selectedPid);
+                }
+
+                if (!capturer.Start())
+                {
+                    if (selectedPid != 0)
+                    {
+                        Console.WriteLine($"[FALLBACK] Process Loopback for PID {selectedPid} failed. Falling back to Master System Audio Loopback...");
+                        capturer = new MasterAudioCapture();
+                        if (!capturer.Start())
+                        {
+                            Console.WriteLine("[ERROR] Failed to start audio capture on fallback.");
+                            return;
+                        }
+                    }
+                    else
+                    {
+                        Console.WriteLine("[ERROR] Failed to start Master audio capture.");
+                        return;
+                    }
                 }
 
                 Console.WriteLine($"[STATUS:CAPTURING_PID:{selectedPid}]");
@@ -61,7 +85,7 @@ namespace ClientAudioHook
                 });
 
                 waitHandle.WaitOne();
-                headlessCapture.Stop();
+                capturer.Stop();
                 Console.WriteLine("[STATUS:STOPPED]");
                 return;
             }
@@ -214,7 +238,14 @@ namespace ClientAudioHook
         }
     }
 
-    class ProcessAudioCapture : IActivateAudioInterfaceCompletionHandler
+    public interface IAudioCapturer
+    {
+        bool Start();
+        void Stop();
+        bool IsCapturing { get; }
+    }
+
+    class ProcessAudioCapture : IAudioCapturer, IActivateAudioInterfaceCompletionHandler
     {
         private readonly uint _pid;
         private AudioClient _audioClient;
@@ -442,6 +473,130 @@ namespace ClientAudioHook
             finally
             {
                 Console.WriteLine("Capture loop stopped.");
+            }
+        }
+    }
+
+    class MasterAudioCapture : IAudioCapturer
+    {
+        private AudioClient? _audioClient;
+        private AudioCaptureClient? _captureClient;
+        private Thread? _captureThread;
+        private bool _isCapturing;
+        public bool IsCapturing => _isCapturing;
+        private EventWaitHandle? _eventWaitHandle;
+        private NamedPipeServerStream? _pipeServer;
+
+        public bool Start()
+        {
+            try
+            {
+                using (var enumerator = new MMDeviceEnumerator())
+                using (var device = enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia))
+                {
+                    _audioClient = AudioClient.FromMMDevice(device);
+                    var mixFormat = _audioClient.MixFormat;
+
+                    Console.WriteLine($"[MASTER LOOPBACK] Format: {mixFormat.SampleRate}Hz, {mixFormat.Channels}ch, {mixFormat.BitsPerSample}bit");
+
+                    long bufferDuration = 10000000; // 1 second
+                    uint flags = 0x00020000 | 0x00040000; // LOOPBACK | EVENTCALLBACK
+
+                    _audioClient.Initialize(AudioClientShareMode.Shared, (AudioClientStreamFlags)flags, bufferDuration, 0, mixFormat, Guid.Empty);
+
+                    _eventWaitHandle = new EventWaitHandle(false, EventResetMode.AutoReset);
+                    _audioClient.SetEventHandle(_eventWaitHandle.SafeWaitHandle.DangerousGetHandle());
+
+                    _captureClient = AudioCaptureClient.FromAudioClient(_audioClient);
+                    _isCapturing = true;
+
+                    Console.WriteLine("Setting up Named Pipe Server for System Loopback...");
+                    _pipeServer = new NamedPipeServerStream("AudioCapturePipe", PipeDirection.Out, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
+
+                    Console.WriteLine("Waiting for Python client to connect...");
+                    _pipeServer.WaitForConnection();
+                    Console.WriteLine("Python client connected!");
+
+                    _audioClient.Start();
+
+                    _captureThread = new Thread(() => CaptureLoop(mixFormat));
+                    _captureThread.Start();
+                    return true;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[ERROR] Master audio capture initialization failed: {ex.Message}");
+                return false;
+            }
+        }
+
+        public void Stop()
+        {
+            _isCapturing = false;
+            _eventWaitHandle?.Set();
+            _captureThread?.Join();
+
+            try { _audioClient?.Stop(); } catch { }
+            try { _audioClient?.Dispose(); } catch { }
+            try { _captureClient?.Dispose(); } catch { }
+            try { _pipeServer?.Dispose(); } catch { }
+        }
+
+        private void CaptureLoop(WaveFormat format)
+        {
+            int bytesPerFrame = format.Channels * (format.BitsPerSample / 8);
+            byte[] buffer = new byte[8192];
+
+            try
+            {
+                while (_isCapturing && _eventWaitHandle != null && _captureClient != null)
+                {
+                    _eventWaitHandle.WaitOne();
+                    if (!_isCapturing) break;
+
+                    while (_captureClient.GetNextPacketSize() > 0)
+                    {
+                        IntPtr dataPtr = _captureClient.GetBuffer(out int numFramesToRead, out AudioClientBufferFlags flags);
+                        int bytesToRead = numFramesToRead * bytesPerFrame;
+
+                        if (buffer.Length < bytesToRead)
+                            buffer = new byte[bytesToRead];
+
+                        if ((flags & AudioClientBufferFlags.Silent) == AudioClientBufferFlags.Silent)
+                        {
+                            Array.Clear(buffer, 0, bytesToRead);
+                        }
+                        else
+                        {
+                            Marshal.Copy(dataPtr, buffer, 0, bytesToRead);
+                        }
+
+                        _captureClient.ReleaseBuffer(numFramesToRead);
+
+                        if (_pipeServer != null && _pipeServer.IsConnected && bytesToRead > 0)
+                        {
+                            try
+                            {
+                                _pipeServer.Write(buffer, 0, bytesToRead);
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine("Master pipe write error: " + ex.Message);
+                                _isCapturing = false;
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"\n[ERROR] Master Capture Loop crashed: {ex.Message}");
+                _isCapturing = false;
+            }
+            finally
+            {
+                Console.WriteLine("Master capture loop stopped.");
             }
         }
     }

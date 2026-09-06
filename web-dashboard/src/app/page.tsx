@@ -51,7 +51,8 @@ import {
   Share2,
   PanelLeft,
   PanelLeftClose,
-  Loader2
+  Loader2,
+  Printer
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Image from 'next/image'
@@ -288,6 +289,7 @@ function CanvasWaveform({ isPlaying }: { isPlaying: boolean }) {
 // App icons
 function AppIcon({ appType }: { appType: string }) {
   const type = (appType || '').toLowerCase()
+  if (type === 'system') return <Volume2 className="w-4 h-4 text-cyan-400" />
   if (type === 'chrome') return <Globe className="w-4 h-4 text-sky-400" />
   if (type === 'teams') return <Monitor className="w-4 h-4 text-blue-400" />
   if (type === 'discord') return <Headphones className="w-4 h-4 text-indigo-400" />
@@ -360,8 +362,10 @@ export default function Dashboard() {
   useEffect(() => {
     fetchSessions()
     checkAudioStatus()
+    scanProcesses()
     const sessionInterval = setInterval(fetchSessions, 6000)
     const audioInterval = setInterval(checkAudioStatus, 1500)
+    const processInterval = setInterval(scanProcesses, 5000)
     setMounted(true)
 
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
@@ -384,6 +388,7 @@ export default function Dashboard() {
     return () => {
       clearInterval(sessionInterval)
       clearInterval(audioInterval)
+      clearInterval(processInterval)
       window.removeEventListener('keydown', handleGlobalKeyDown)
     }
   }, [])
@@ -454,37 +459,45 @@ export default function Dashboard() {
         const data = await res.json()
         if (data.processes && data.processes.length > 0) {
           setProcesses(data.processes)
-          if (!selectedPid) {
+          if (selectedPid === null || selectedPid === undefined) {
             setSelectedPid(data.processes[0].pid)
             setSelectedAppName(data.processes[0].name)
           }
         } else {
-          setProcesses([])
-          showToast("No active audio streams detected.", "info")
+          const sysDefault = [{
+            pid: 0,
+            name: "Entire System Audio (All Apps & Meetings)",
+            title: "Entire System Audio (All Apps & Meetings)",
+            appType: "system",
+            isActive: true
+          }]
+          setProcesses(sysDefault)
+          if (selectedPid === null || selectedPid === undefined) {
+            setSelectedPid(0)
+            setSelectedAppName("Entire System Audio (All Apps & Meetings)")
+          }
         }
       }
     } catch (err: any) {
-      showToast(`Scan error: ${err.message}`, "error")
+      // quiet fallback
     }
   }
 
   // Start In-Browser Recording
   const handleStartRecording = async () => {
-    if (!selectedPid) {
-      showToast("Please choose an active audio source first.", "error")
-      return
-    }
+    const targetPid = (selectedPid !== null && selectedPid !== undefined) ? selectedPid : 0
+    const targetName = selectedAppName || "Entire System Audio (All Apps & Meetings)"
 
     try {
       const res = await fetch('/api/audio', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'start', pid: selectedPid, name: selectedAppName })
+        body: JSON.stringify({ action: 'start', pid: targetPid, name: targetName })
       })
       const data = await res.json()
       if (data.success) {
         setIsRecording(true)
-        showToast(`Recording ${selectedAppName}`, "success")
+        showToast(`Recording ${targetName}`, "success")
       } else {
         showToast(`Failed: ${data.message || 'Unknown error'}`, "error")
       }
@@ -1166,6 +1179,22 @@ export default function Dashboard() {
                 )}
               </button>
 
+              {/* Active Audio Source Indicator Pill */}
+              <button 
+                onClick={() => {
+                  setShowStudio(true)
+                  scanProcesses()
+                }}
+                className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-xs text-zinc-300 transition-all active:scale-95"
+                title="Click to select audio capture source"
+              >
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="max-w-[150px] truncate text-[11px] font-medium text-zinc-200">
+                  {selectedAppName || "Entire System Audio"}
+                </span>
+                <ChevronDown className="w-3 h-3 text-zinc-500" />
+              </button>
+
               {/* Quick Spotlight Trigger Pill */}
               <button 
                 onClick={() => setShowCommandPalette(true)}
@@ -1279,6 +1308,17 @@ export default function Dashboard() {
                     )}
 
                     <button 
+                      onClick={() => { window.print(); setShowExportMenu(false) }}
+                      className="flex items-center gap-2.5 px-3 py-2 text-xs text-zinc-200 hover:bg-white/[0.08] text-left transition-colors"
+                    >
+                      <Printer className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                      <div>
+                        <div className="font-medium text-white">Print / Save as PDF</div>
+                        <div className="text-[10px] text-zinc-500">Formatted study cheat-sheet</div>
+                      </div>
+                    </button>
+
+                    <button 
                       onClick={() => { handleCopySummary(); setShowExportMenu(false) }}
                       className="flex items-center gap-2.5 px-3 py-2 text-xs text-zinc-200 hover:bg-white/[0.08] text-left transition-colors"
                     >
@@ -1389,7 +1429,7 @@ export default function Dashboard() {
                       {!isRecording ? (
                         <button
                           onClick={handleStartRecording}
-                          disabled={!selectedPid}
+                          disabled={selectedPid === null || selectedPid === undefined}
                           className="px-5 py-2 bg-white hover:bg-zinc-200 disabled:opacity-30 disabled:cursor-not-allowed text-black rounded-xl text-xs font-semibold shadow-md active:scale-95 transition-all flex items-center gap-2"
                         >
                           <Mic className="w-3.5 h-3.5 text-black" />
@@ -2246,9 +2286,37 @@ function TranscriptTab({ session, showToast }: { session: any, showToast: any })
     showToast("Transcript downloaded as text file", "success")
   }
 
+  const [filterText, setFilterText] = useState('')
+
+  // Break raw transcript into readable timestamped paragraphs (~40-50 words per block)
+  const paragraphs = useMemo(() => {
+    if (!text.trim()) return []
+    const words = text.split(/\s+/)
+    const blocks: { timestamp: string; content: string }[] = []
+    const wordsPerBlock = 45
+
+    for (let i = 0; i < words.length; i += wordsPerBlock) {
+      const blockWords = words.slice(i, i + wordsPerBlock)
+      const startSec = Math.floor((i / 150) * 60)
+      const mins = Math.floor(startSec / 60)
+      const secs = startSec % 60
+      blocks.push({
+        timestamp: `${mins}:${secs.toString().padStart(2, '0')}`,
+        content: blockWords.join(' ')
+      })
+    }
+    return blocks
+  }, [text])
+
+  const filteredParagraphs = useMemo(() => {
+    if (!filterText.trim()) return paragraphs
+    const q = filterText.toLowerCase()
+    return paragraphs.filter(p => p.content.toLowerCase().includes(q))
+  }, [paragraphs, filterText])
+
   return (
     <div className="max-w-4xl mx-auto h-full flex flex-col pb-12">
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
         <div className="flex items-center gap-2 text-xs text-zinc-400">
           <span className="bg-white/[0.04] px-2.5 py-0.5 rounded-full border border-white/[0.06]">
             {wordCount} words
@@ -2258,25 +2326,52 @@ function TranscriptTab({ session, showToast }: { session: any, showToast: any })
         </div>
 
         <div className="flex items-center gap-2">
+          {/* In-transcript Search */}
+          <div className="relative">
+            <Search className="w-3 h-3 text-zinc-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
+            <input 
+              type="text"
+              value={filterText}
+              onChange={(e) => setFilterText(e.target.value)}
+              placeholder="Find in transcript..."
+              className="w-44 bg-white/[0.04] border border-white/[0.08] rounded-xl pl-7 pr-2.5 py-1 text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-white/20 transition-all"
+            />
+          </div>
+
           <button
             onClick={downloadText}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-xs font-medium text-zinc-200 active:scale-95 transition-all"
           >
             <FileDown className="w-3.5 h-3.5 text-zinc-400" />
-            <span>Download .txt</span>
+            <span>.txt</span>
           </button>
           <button
             onClick={copyTranscript}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-xs font-medium text-zinc-200 active:scale-95 transition-all"
           >
             <Copy className="w-3.5 h-3.5 text-zinc-300" />
-            <span>Copy All</span>
+            <span>Copy</span>
           </button>
         </div>
       </div>
 
-      <div className="bg-white/[0.025] backdrop-blur-2xl border border-white/[0.08] rounded-3xl p-7 flex-1 overflow-y-auto leading-relaxed font-sans text-sm text-zinc-300 whitespace-pre-wrap select-text shadow-[0_8px_32px_rgba(0,0,0,0.25)]">
-        {text || 'No transcript text available for this session.'}
+      <div className="bg-white/[0.025] backdrop-blur-2xl border border-white/[0.08] rounded-3xl p-6 flex-1 overflow-y-auto space-y-3 select-text shadow-[0_8px_32px_rgba(0,0,0,0.25)]">
+        {filteredParagraphs.length > 0 ? (
+          filteredParagraphs.map((p, idx) => (
+            <div key={idx} className="flex items-start gap-3.5 p-2 rounded-xl hover:bg-white/[0.02] transition-colors group">
+              <span className="text-[11px] font-mono font-semibold text-cyan-400 bg-cyan-950/40 border border-cyan-800/30 px-2 py-0.5 rounded-lg select-none shrink-0">
+                {p.timestamp}
+              </span>
+              <p className="text-sm leading-relaxed text-zinc-200">
+                {p.content}
+              </p>
+            </div>
+          ))
+        ) : (
+          <div className="text-center py-12 text-zinc-500 text-xs italic">
+            {text ? "No matching spoken sentences found for this search." : "No transcript text available for this session."}
+          </div>
+        )}
       </div>
     </div>
   )
