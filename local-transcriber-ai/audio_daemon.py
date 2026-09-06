@@ -209,6 +209,21 @@ def recording_loop():
             pass
         state["vuLevel"] = 0.0
 
+        # If pipe closed unexpectedly while still flagged as recording
+        if state["isRecording"]:
+            state["isRecording"] = False
+            if csharp_process:
+                time.sleep(0.3)
+                poll = csharp_process.poll()
+                if poll is not None:
+                    err_msg = ""
+                    try:
+                        err_msg = csharp_process.stderr.read()
+                    except Exception:
+                        pass
+                    state["lastError"] = f"Audio capture hook exited unexpectedly (Code {poll}): {err_msg.strip()}"
+                    print(f"[DAEMON] {state['lastError']}")
+
 def live_transcription_worker():
     global state
     try:
@@ -316,6 +331,10 @@ def stop_capture():
     if csharp_process:
         try:
             csharp_process.terminate()
+            try:
+                csharp_process.wait(timeout=2.0)
+            except subprocess.TimeoutExpired:
+                csharp_process.kill()
         except Exception:
             pass
         csharp_process = None
@@ -434,6 +453,15 @@ def cleanup_stale_port(port):
     except Exception:
         pass
 
+def warmup_whisper():
+    try:
+        import local_stt
+        print("[DAEMON] Pre-warming Faster-Whisper tiny.en model in background...")
+        local_stt.get_whisper_model()
+        print("[DAEMON] Faster-Whisper model cached and ready.")
+    except Exception as e:
+        print(f"[DAEMON] Note on Whisper warmup: {e}")
+
 def run():
     cleanup_stale_port(PORT)
     try:
@@ -443,6 +471,7 @@ def run():
         cleanup_stale_port(PORT)
         server = ThreadingHTTPServer(('127.0.0.1', PORT), DaemonHandler)
 
+    threading.Thread(target=warmup_whisper, daemon=True).start()
     print(f"[DAEMON] Nexus Audio Controller Daemon active on http://127.0.0.1:{PORT}")
     try:
         server.serve_forever()

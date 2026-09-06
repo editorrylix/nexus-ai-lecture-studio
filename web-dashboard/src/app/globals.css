@@ -13,12 +13,54 @@
   --font-mono: var(--font-geist-mono);
 }
 
-/* Hide default cursor on desktop when using the custom cursor */
+/* Hide default cursor on desktop ONLY when custom cursor is enabled */
 @media (min-width: 768px) {
-  *, *::before, *::after,
-  html, body, a, button, input, textarea, select, [role="button"] {
+  html.custom-cursor-enabled,
+  html.custom-cursor-enabled *,
+  html.custom-cursor-enabled *::before,
+  html.custom-cursor-enabled *::after,
+  html.custom-cursor-enabled a,
+  html.custom-cursor-enabled button,
+  html.custom-cursor-enabled input,
+  html.custom-cursor-enabled textarea,
+  html.custom-cursor-enabled select,
+  html.custom-cursor-enabled [role="button"] {
     cursor: none !important;
   }
+}
+
+/* Custom Cursor CSS Helper Rules */
+[data-mode="text"] .cursor-text-beam {
+  opacity: 1 !important;
+}
+[data-mode="text"] .cursor-stealth-pointer {
+  opacity: 0 !important;
+}
+[data-mode="default"] .cursor-text-beam {
+  opacity: 0 !important;
+}
+[data-mode="default"] .cursor-stealth-pointer {
+  opacity: 1 !important;
+}
+[data-mode="interactive"] .cursor-text-beam {
+  opacity: 0 !important;
+}
+[data-mode="interactive"] .cursor-stealth-pointer {
+  opacity: 1 !important;
+  transform: scale(1.1);
+}
+[data-mode="interactive"] .cursor-brackets {
+  opacity: 1 !important;
+}
+.is-clicking .cursor-stealth-pointer {
+  transform: scale(0.82) !important;
+}
+.shockwave-active {
+  animation: shockwavePulse 0.3s ease-out forwards;
+}
+@keyframes shockwavePulse {
+  0% { transform: scale(0.3) rotate(45deg); opacity: 1; }
+  100% { transform: scale(2.4) rotate(45deg); opacity: 0; }
 }
 
 body {

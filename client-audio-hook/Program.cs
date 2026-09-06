@@ -69,22 +69,25 @@ namespace ClientAudioHook
                 }
 
                 Console.WriteLine($"[STATUS:CAPTURING_PID:{selectedPid}]");
-                // Wait until canceled or stdin closed
                 var waitHandle = new ManualResetEvent(false);
                 Console.CancelKeyPress += (s, e) => {
                     e.Cancel = true;
                     waitHandle.Set();
                 };
-
-                // Read stdin asynchronously in case parent process signals stop
-                System.Threading.Tasks.Task.Run(() => {
-                    try {
-                        while (Console.ReadLine() != null) { }
-                    } catch { }
+                AppDomain.CurrentDomain.ProcessExit += (s, e) => {
                     waitHandle.Set();
-                });
+                };
 
-                waitHandle.WaitOne();
+                // Keep capturing until canceled or capturer stops internally
+                while (!waitHandle.WaitOne(250))
+                {
+                    if (!capturer.IsCapturing)
+                    {
+                        Console.WriteLine("[INFO] Audio capturer stopped capturing.");
+                        break;
+                    }
+                }
+
                 capturer.Stop();
                 Console.WriteLine("[STATUS:STOPPED]");
                 return;

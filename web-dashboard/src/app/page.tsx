@@ -58,65 +58,67 @@ import { motion, AnimatePresence } from 'framer-motion'
 import Image from 'next/image'
 
 // ==========================================
-// 1. CUSTOM COLOR-INVERTING GEOMETRIC CURSOR (Zero Circles)
+// 1. HARDWARE-ACCELERATED COLOR-INVERTING CURSOR (Zero-Lag Direct DOM)
 // ==========================================
-function ModernCursor() {
-  const [pos, setPos] = useState({ x: -100, y: -100 })
-  const [isInteractive, setIsInteractive] = useState(false)
-  const [isText, setIsText] = useState(false)
-  const [isClicking, setIsClicking] = useState(false)
-  const [isVisible, setIsVisible] = useState(false)
-  const [clickCount, setClickCount] = useState(0)
+function ModernCursor({ enabled = true }: { enabled?: boolean }) {
+  const cursorRef = useRef<HTMLDivElement>(null)
+  const shockwaveRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    let animFrame: number
+    if (!enabled) {
+      document.documentElement.classList.remove('custom-cursor-enabled')
+      return
+    }
+
+    document.documentElement.classList.add('custom-cursor-enabled')
+    const cursor = cursorRef.current
+    if (!cursor) return
+
     let lastTarget: HTMLElement | null = null
 
     const handleMove = (e: MouseEvent) => {
-      setPos({ x: e.clientX, y: e.clientY })
-      if (!isVisible) setIsVisible(true)
+      // Direct GPU transform - ZERO React re-renders, 144Hz instant response
+      cursor.style.transform = `translate3d(${e.clientX}px, ${e.clientY}px, 0)`
+      cursor.style.opacity = '1'
 
       const target = e.target as HTMLElement
       if (!target || target === lastTarget) return
       lastTarget = target
 
-      cancelAnimationFrame(animFrame)
-      animFrame = requestAnimationFrame(() => {
-        const tag = target.tagName
-        const isTextInput = tag === 'INPUT' || tag === 'TEXTAREA' || target.isContentEditable
-        
-        if (isTextInput) {
-          setIsText(true)
-          setIsInteractive(false)
-          return
-        }
+      const tag = target.tagName
+      const isTextInput = tag === 'INPUT' || tag === 'TEXTAREA' || target.isContentEditable || 
+                          tag === 'P' || tag === 'SPAN' || tag === 'LI' || tag === 'H1' || tag === 'H2' || tag === 'H3' || tag === 'CODE' || tag === 'PRE'
+      const isClickable = tag === 'BUTTON' || tag === 'A' || target.getAttribute('role') === 'button' || !!target.closest('button, a, [role="button"]')
 
-        const isClickable = tag === 'BUTTON' || tag === 'A' || target.getAttribute('role') === 'button' || !!target.closest('button, a, [role="button"]')
-        if (isClickable) {
-          setIsText(false)
-          setIsInteractive(true)
-          return
-        }
-
-        const isParagraph = tag === 'P' || tag === 'SPAN' || tag === 'LI' || tag === 'H1' || tag === 'H2' || tag === 'H3' || tag === 'CODE' || tag === 'PRE'
-        if (isParagraph) {
-          setIsText(true)
-          setIsInteractive(false)
-          return
-        }
-
-        setIsText(false)
-        setIsInteractive(false)
-      })
+      if (isTextInput) {
+        cursor.dataset.mode = 'text'
+      } else if (isClickable) {
+        cursor.dataset.mode = 'interactive'
+      } else {
+        cursor.dataset.mode = 'default'
+      }
     }
 
     const handleDown = () => {
-      setIsClicking(true)
-      setClickCount(c => c + 1)
+      cursor.classList.add('is-clicking')
+      if (shockwaveRef.current) {
+        shockwaveRef.current.classList.remove('shockwave-active')
+        void shockwaveRef.current.offsetWidth // force reflow
+        shockwaveRef.current.classList.add('shockwave-active')
+      }
     }
-    const handleUp = () => setIsClicking(false)
-    const handleLeave = () => setIsVisible(false)
-    const handleEnter = () => setIsVisible(true)
+
+    const handleUp = () => {
+      cursor.classList.remove('is-clicking')
+    }
+
+    const handleLeave = () => {
+      cursor.style.opacity = '0'
+    }
+
+    const handleEnter = () => {
+      cursor.style.opacity = '1'
+    }
 
     window.addEventListener('mousemove', handleMove, { passive: true })
     window.addEventListener('mousedown', handleDown)
@@ -125,62 +127,44 @@ function ModernCursor() {
     document.addEventListener('mouseenter', handleEnter)
 
     return () => {
+      document.documentElement.classList.remove('custom-cursor-enabled')
       window.removeEventListener('mousemove', handleMove)
       window.removeEventListener('mousedown', handleDown)
       window.removeEventListener('mouseup', handleUp)
       document.removeEventListener('mouseleave', handleLeave)
       document.removeEventListener('mouseenter', handleEnter)
     }
-  }, [isVisible])
+  }, [enabled])
+
+  if (!enabled) return null
 
   return (
     <div 
-      className={`pointer-events-none fixed top-0 left-0 z-[999999] will-change-transform mix-blend-difference hidden md:block select-none transition-opacity duration-150 ${
-        isVisible ? 'opacity-100' : 'opacity-0'
-      }`}
-      style={{
-        transform: `translate3d(${pos.x}px, ${pos.y}px, 0)`
-      }}
+      ref={cursorRef}
+      className="pointer-events-none fixed top-0 left-0 z-[999999] will-change-transform mix-blend-difference hidden md:block select-none opacity-0 transition-opacity duration-150"
+      style={{ transform: 'translate3d(-100px, -100px, 0)' }}
+      data-mode="default"
     >
-      {/* Special Effect 1: Inverted Click Diamond Shockwave Pulse */}
-      {clickCount > 0 && (
-        <motion.div
-          key={clickCount}
-          initial={{ scale: 0.3, opacity: 1 }}
-          animate={{ scale: 2.4, opacity: 0 }}
-          transition={{ duration: 0.28, ease: "easeOut" }}
-          className="absolute -top-1.5 -left-1.5 w-4 h-4 border-2 border-white rotate-45 pointer-events-none"
-        />
-      )}
+      {/* Shockwave Diamond Animation */}
+      <div
+        ref={shockwaveRef}
+        className="absolute -top-1.5 -left-1.5 w-4 h-4 border-2 border-white rotate-45 pointer-events-none opacity-0 transition-all duration-300"
+      />
 
       {/* State A: Inverted Text Beam (Unobstructed Sentence Reading) */}
-      <div 
-        className={`absolute -top-2 left-0 transition-opacity duration-150 ${
-          isText ? 'opacity-100' : 'opacity-0 pointer-events-none'
-        }`}
-      >
+      <div className="cursor-text-beam absolute -top-2 left-0 pointer-events-none opacity-0 transition-opacity duration-150">
         <div className="w-[1.5px] h-4 bg-white shadow-sm" />
       </div>
 
       {/* State B: Precision Stealth Pointer & Interactive Reticle */}
-      <div 
-        className={`absolute -top-0.5 -left-0.5 transition-transform duration-75 ${
-          !isText ? 'opacity-100' : 'opacity-0 pointer-events-none'
-        } ${isClicking ? 'scale-[0.82]' : isInteractive ? 'scale-110' : 'scale-100'}`}
-      >
-        {/* Special Effect 2: Precision Corner Brackets on Interactive Elements */}
-        {isInteractive && !isText && (
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="absolute -top-1 -left-1 w-6 h-6 pointer-events-none"
-          >
-            <div className="absolute top-0 left-0 w-1.5 h-1.5 border-t border-l border-white" />
-            <div className="absolute top-0 right-0 w-1.5 h-1.5 border-t border-r border-white" />
-            <div className="absolute bottom-0 left-0 w-1.5 h-1.5 border-b border-l border-white" />
-            <div className="absolute bottom-0 right-0 w-1.5 h-1.5 border-b border-r border-white" />
-          </motion.div>
-        )}
+      <div className="cursor-stealth-pointer absolute -top-0.5 -left-0.5 pointer-events-none transition-all duration-75">
+        {/* Reticle brackets on interactive elements */}
+        <div className="cursor-brackets absolute -top-1 -left-1 w-6 h-6 pointer-events-none opacity-0 transition-opacity duration-150">
+          <div className="absolute top-0 left-0 w-1.5 h-1.5 border-t border-l border-white" />
+          <div className="absolute top-0 right-0 w-1.5 h-1.5 border-t border-r border-white" />
+          <div className="absolute bottom-0 left-0 w-1.5 h-1.5 border-b border-l border-white" />
+          <div className="absolute bottom-0 right-0 w-1.5 h-1.5 border-b border-r border-white" />
+        </div>
 
         <svg width="18" height="18" viewBox="0 0 24 24" className="fill-white drop-shadow-sm">
           <path d="M2 2L18 10L11 12L8.5 19L2 2Z" />
@@ -333,6 +317,21 @@ export default function Dashboard() {
   const [processes, setProcesses] = useState<any[]>([])
   const [selectedPid, setSelectedPid] = useState<number | null>(null)
   const [selectedAppName, setSelectedAppName] = useState<string>('')
+  const selectedPidRef = useRef<number | null>(null)
+  const selectedAppNameRef = useRef<string>('')
+
+  // Custom Cursor Preference State
+  const [customCursorEnabled, setCustomCursorEnabled] = useState(true)
+
+  const handleToggleCustomCursor = (val: boolean) => {
+    setCustomCursorEnabled(val)
+    localStorage.setItem('nexus_custom_cursor', String(val))
+    if (val) {
+      document.documentElement.classList.add('custom-cursor-enabled')
+    } else {
+      document.documentElement.classList.remove('custom-cursor-enabled')
+    }
+  }
   const [isRecording, setIsRecording] = useState(false)
   const [isProcessingAI, setIsProcessingAI] = useState(false)
   const [recordingSeconds, setRecordingSeconds] = useState(0)
@@ -360,6 +359,15 @@ export default function Dashboard() {
 
   // Initial Load & Global Keyboard Shortcuts
   useEffect(() => {
+    // Check saved cursor preference
+    const savedCursor = localStorage.getItem('nexus_custom_cursor')
+    if (savedCursor === 'false') {
+      setCustomCursorEnabled(false)
+      document.documentElement.classList.remove('custom-cursor-enabled')
+    } else {
+      document.documentElement.classList.add('custom-cursor-enabled')
+    }
+
     fetchSessions()
     checkAudioStatus()
     scanProcesses()
@@ -457,24 +465,28 @@ export default function Dashboard() {
       const res = await fetch('/api/audio?action=processes', { cache: 'no-store' })
       if (res.ok) {
         const data = await res.json()
-        if (data.processes && data.processes.length > 0) {
-          setProcesses(data.processes)
-          if (selectedPid === null || selectedPid === undefined) {
-            setSelectedPid(data.processes[0].pid)
-            setSelectedAppName(data.processes[0].name)
-          }
+        const procs = (data.processes && data.processes.length > 0) ? data.processes : [{
+          pid: 0,
+          name: "Entire System Audio (All Apps & Meetings)",
+          title: "Entire System Audio (All Apps & Meetings)",
+          appType: "system",
+          isActive: true
+        }]
+        setProcesses(procs)
+
+        // Only default to first item if user hasn't selected an application yet
+        if (selectedPidRef.current === null || selectedPidRef.current === undefined) {
+          const initial = procs[0]
+          selectedPidRef.current = initial.pid
+          selectedAppNameRef.current = initial.name
+          setSelectedPid(initial.pid)
+          setSelectedAppName(initial.name)
         } else {
-          const sysDefault = [{
-            pid: 0,
-            name: "Entire System Audio (All Apps & Meetings)",
-            title: "Entire System Audio (All Apps & Meetings)",
-            appType: "system",
-            isActive: true
-          }]
-          setProcesses(sysDefault)
-          if (selectedPid === null || selectedPid === undefined) {
-            setSelectedPid(0)
-            setSelectedAppName("Entire System Audio (All Apps & Meetings)")
+          // Keep user's chosen PID! Do NOT overwrite it with procs[0]!
+          const match = procs.find((p: any) => p.pid === selectedPidRef.current)
+          if (match) {
+            selectedAppNameRef.current = match.name
+            setSelectedAppName(match.name)
           }
         }
       }
@@ -757,7 +769,7 @@ export default function Dashboard() {
     <div className="flex flex-col h-screen w-full bg-[#07080B] text-[#F3F4F6] font-sans overflow-hidden selection:bg-white/20 selection:text-white relative">
       
       {/* 1. Inverted Geometric Custom Cursor (Zero Circles) */}
-      <ModernCursor />
+      <ModernCursor enabled={customCursorEnabled} />
 
       {/* 2. Ambient Depth Lights */}
       <div className="absolute top-0 left-1/4 w-[600px] h-[350px] bg-gradient-to-br from-cyan-500/8 via-indigo-500/5 to-transparent rounded-full blur-[140px] pointer-events-none" />
@@ -1384,7 +1396,9 @@ export default function Dashboard() {
                           onClick={() => {
                             if (!isRecording) {
                               setSelectedPid(p.pid)
+                              selectedPidRef.current = p.pid
                               setSelectedAppName(p.name)
+                              selectedAppNameRef.current = p.name
                             }
                           }}
                           className={`p-3 rounded-2xl border flex items-center gap-3 cursor-pointer transition-all ${
@@ -1680,6 +1694,32 @@ export default function Dashboard() {
                   <label className="text-zinc-500 block mb-1">Storage Path on Disk:</label>
                   <div className="p-2.5 bg-black/40 border border-white/[0.08] rounded-xl font-mono text-[11px] text-zinc-300 break-all select-all">
                     {storageDir || 'd:\\Projects\\transcribe-edtech\\storage'}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-zinc-500 block mb-1.5">Mouse Cursor Style:</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => handleToggleCustomCursor(true)}
+                      className={`p-2.5 rounded-xl border text-xs font-medium flex items-center justify-center gap-1.5 transition-all ${
+                        customCursorEnabled 
+                          ? 'bg-white text-black border-white shadow-md' 
+                          : 'bg-white/[0.04] text-zinc-400 border-white/[0.08] hover:bg-white/[0.08] hover:text-white'
+                      }`}
+                    >
+                      <span>⚡ Custom Stealth</span>
+                    </button>
+                    <button
+                      onClick={() => handleToggleCustomCursor(false)}
+                      className={`p-2.5 rounded-xl border text-xs font-medium flex items-center justify-center gap-1.5 transition-all ${
+                        !customCursorEnabled 
+                          ? 'bg-white text-black border-white shadow-md' 
+                          : 'bg-white/[0.04] text-zinc-400 border-white/[0.08] hover:bg-white/[0.08] hover:text-white'
+                      }`}
+                    >
+                      <span>🖥️ Windows Native</span>
+                    </button>
                   </div>
                 </div>
 
