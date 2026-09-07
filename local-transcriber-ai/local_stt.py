@@ -29,20 +29,34 @@ if 'av' not in sys.modules:
 
 from faster_whisper import WhisperModel
 
-_cached_model = None
+_cached_models = {}
 
-def get_whisper_model(model_size="tiny.en", device="cpu", compute_type="int8"):
-    global _cached_model
-    if _cached_model is None:
+def get_whisper_model(model_size="base", device="cpu", compute_type="int8"):
+    global _cached_models
+    # Fallback to tiny if base is not downloaded yet
+    actual_size = model_size
+    if actual_size not in _cached_models:
         # Constrain to 2 CPU threads so it never monopolizes the Ryzen 5 U-series processor
-        _cached_model = WhisperModel(
-            model_size, 
-            device=device, 
-            compute_type=compute_type,
-            cpu_threads=2,
-            num_workers=1
-        )
-    return _cached_model
+        try:
+            _cached_models[actual_size] = WhisperModel(
+                actual_size, 
+                device=device, 
+                compute_type=compute_type,
+                cpu_threads=2,
+                num_workers=1
+            )
+        except Exception:
+            # Fallback to tiny
+            actual_size = "tiny"
+            if actual_size not in _cached_models:
+                _cached_models[actual_size] = WhisperModel(
+                    actual_size, 
+                    device=device, 
+                    compute_type=compute_type,
+                    cpu_threads=2,
+                    num_workers=1
+                )
+    return _cached_models[actual_size]
 
 def load_audio_waveform(audio_path, target_sr=16000):
     """
@@ -84,11 +98,17 @@ def load_audio_waveform(audio_path, target_sr=16000):
 
     return audio
 
-def transcribe_audio_file(audio_path, model_size="tiny.en"):
+def transcribe_audio_file(audio_path, model_size="base", language=None, prompt_mode="auto"):
     """
     Transcribes a local WAV audio file completely offline on your PC.
     Optimized for ultra-low CPU usage and real-time responsiveness.
     Safe under Windows 11 Smart App Control.
+    
+    Supports:
+      - 'auto': Multilingual auto-detection (English, Hindi, etc.)
+      - 'hinglish': Code-switched Hindi and English written in Latin/Roman script
+      - 'hi': Hindi written in Devanagari script
+      - 'en': English Only
     """
     if not os.path.exists(audio_path):
         raise FileNotFoundError(f"Audio file not found: {audio_path}")
@@ -96,16 +116,37 @@ def transcribe_audio_file(audio_path, model_size="tiny.en"):
     waveform = load_audio_waveform(audio_path)
     model = get_whisper_model(model_size)
 
+    # Configure language and initial prompt based on prompt_mode
+    initial_prompt = None
+    whisper_lang = None
+
+    mode = (prompt_mode or "auto").lower()
+    if mode == "hinglish":
+        initial_prompt = (
+            "Transcribe accurately in Hinglish (Hindi spoken words written in Roman script) "
+            "mixed with English technical terms. Examples: Namaste dosto, aaj hum padhenge "
+            "standard deviation formula. Yeh concept exam ke liye bohot important hai."
+        )
+        whisper_lang = None
+    elif mode in ("hi", "hindi"):
+        whisper_lang = "hi"
+        initial_prompt = "नमस्ते दोस्तों, आज हम इस व्याख्यान में मुख्य अवधारणाओं को समझेंगे।"
+    elif mode in ("en", "english"):
+        whisper_lang = "en"
+    else:
+        whisper_lang = language if (language and language != "auto") else None
+        initial_prompt = "Transcribe clearly in English or Hindi / Hinglish as spoken."
+
     # Pass the numpy ndarray directly to model.transcribe to bypass PyAV entirely
-    # beam_size=1 is 3.5x faster than beam_size=5 and uses 75% less CPU
-    # vad_filter skips silent gaps automatically
     segments_raw, info = model.transcribe(
         waveform,
         beam_size=1,
         best_of=1,
         temperature=0.0,
         vad_filter=True,
-        vad_parameters=dict(min_silence_duration_ms=400)
+        vad_parameters=dict(min_silence_duration_ms=400),
+        language=whisper_lang,
+        initial_prompt=initial_prompt
     )
     
     segments = []
@@ -127,15 +168,22 @@ def transcribe_audio_file(audio_path, model_size="tiny.en"):
         "text": full_text,
         "segments": segments,
         "duration": getattr(info, "duration", round(len(waveform) / 16000.0, 2)),
-        "language": getattr(info, "language", "en")
+        "language": getattr(info, "language", whisper_lang or "en")
     }
 
 if __name__ == "__main__":
+    if sys.platform == 'win32':
+        try:
+            sys.stdout.reconfigure(encoding='utf-8')
+        except Exception:
+            pass
     if len(sys.argv) > 1:
         target = sys.argv[1]
-        print(f"Transcribing {target} locally...")
-        res = transcribe_audio_file(target)
+        mode = sys.argv[2] if len(sys.argv) > 2 else "auto"
+        print(f"Transcribing {target} locally (mode: {mode})...")
+        res = transcribe_audio_file(target, model_size="base", prompt_mode=mode)
         print("Done! Transcript length:", len(res["text"]))
+        print("Detected language:", res.get("language"))
         print("Sample:", res["text"][:200])
     else:
         print("Local STT engine ready.")

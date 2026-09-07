@@ -77,12 +77,12 @@ def ensure_nextjs_running():
 
     try:
         CREATE_NO_WINDOW = 0x08000000
-        # If production build exists, use start; otherwise fallback to dev
         has_build = (WEB_DIR / ".next").exists()
-        cmd = ["npm.cmd", "run", "start"] if has_build else ["npm.cmd", "run", "dev"]
+        cmd = "npm run start" if has_build else "npm run dev"
         next_process = subprocess.Popen(
             cmd,
             cwd=str(WEB_DIR),
+            shell=True,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             creationflags=CREATE_NO_WINDOW
@@ -101,16 +101,38 @@ def open_folder(path):
     except Exception as e:
         print(f"[TRAY] Could not open folder {path}: {e}")
 
+def set_language(lang_code):
+    global tray_icon
+    audio_daemon.state["language"] = lang_code
+    if tray_icon:
+        try:
+            labels = {
+                "auto": "Auto-Detect (Hindi / Hinglish / English)",
+                "hinglish": "Hinglish (Hindi in Roman script)",
+                "hi": "Hindi (हिंदी - Devanagari)",
+                "en": "English Only"
+            }
+            tray_icon.notify(f"Transcription language: {labels.get(lang_code, lang_code)}", "Nexus AI Studio")
+            tray_icon.menu = get_tray_menu()
+        except Exception:
+            pass
+
 def toggle_recording():
     """Quick toggle recording from tray menu."""
+    global tray_icon
     state = audio_daemon.state
     if state.get("isRecording"):
         audio_daemon.stop_capture()
+        if tray_icon:
+            try:
+                tray_icon.notify("Recording stopped. Generating AI lecture notes in background...", "Nexus AI Studio")
+            except Exception:
+                pass
     else:
         # Capture YouTube/Chrome if active, else top process
         procs = audio_daemon.get_audio_processes()
         target_pid = 0
-        target_name = "System Audio"
+        target_name = "Entire System Audio (All Apps & Meetings)"
         for p in procs:
             if "chrome" in p["name"].lower() or p.get("isActive"):
                 target_pid = p["pid"]
@@ -119,8 +141,40 @@ def toggle_recording():
         if target_pid == 0 and procs:
             target_pid = procs[0]["pid"]
             target_name = procs[0]["name"]
-        if target_pid > 0:
-            audio_daemon.start_capture(target_pid, target_name)
+            
+        # CRITICAL FIX: PID 0 is valid (Entire System Audio)!
+        if target_pid is not None:
+            ok, msg = audio_daemon.start_capture(target_pid, target_name, language=state.get("language", "auto"))
+            if tray_icon:
+                try:
+                    tray_icon.notify(f"Recording active: {target_name}", "Nexus AI Studio")
+                except Exception:
+                    pass
+
+def get_tray_menu():
+    state = audio_daemon.state
+    is_rec = state.get("isRecording", False)
+    curr_lang = state.get("language", "auto")
+    
+    rec_label = "⏹️ Stop Recording & Synthesize" if is_rec else "🔴 Start Recording (System Audio)"
+    
+    return pystray.Menu(
+        pystray.MenuItem("⚡ Open Nexus Studio", lambda icon, item: open_web_studio(), default=True),
+        pystray.MenuItem(rec_label, lambda icon, item: toggle_recording()),
+        pystray.Menu.SEPARATOR,
+        pystray.MenuItem("🗣️ Language Mode", pystray.Menu(
+            pystray.MenuItem("🌐 Auto-Detect (Hindi / Hinglish / English)", lambda icon, item: set_language("auto"), checked=lambda item: curr_lang == "auto"),
+            pystray.MenuItem("🇮🇳 Hinglish (Hindi in Roman Script)", lambda icon, item: set_language("hinglish"), checked=lambda item: curr_lang == "hinglish"),
+            pystray.MenuItem("🕉️ Hindi (हिंदी - Devanagari)", lambda icon, item: set_language("hi"), checked=lambda item: curr_lang == "hi"),
+            pystray.MenuItem("🇬🇧 English Only", lambda icon, item: set_language("en"), checked=lambda item: curr_lang == "en"),
+        )),
+        pystray.Menu.SEPARATOR,
+        pystray.MenuItem("📝 Obsidian Notes", lambda icon, item: open_folder(STORAGE_DIR / "markdown")),
+        pystray.MenuItem("🗂️ Anki Decks", lambda icon, item: open_folder(STORAGE_DIR / "exports")),
+        pystray.MenuItem("🎙️ Audio Recordings", lambda icon, item: open_folder(STORAGE_DIR / "recordings")),
+        pystray.Menu.SEPARATOR,
+        pystray.MenuItem("❌ Exit Nexus Studio", lambda icon, item: exit_application())
+    )
 
 def exit_application():
     """Clean exit: stop recording, kill background server, exit tray."""
@@ -143,21 +197,26 @@ def exit_application():
     os._exit(0)
 
 def status_icon_updater(icon):
-    """Periodically checks recording state to swap tray icon (green vs red vs yellow)."""
+    """Periodically checks recording state to swap tray icon and title."""
     last_state = "idle"
     while True:
         try:
-            time.sleep(2.0)
+            time.sleep(1.5)
             state = audio_daemon.state
             current_state = "idle"
             if state.get("isRecording"):
                 current_state = "recording"
+                icon.title = f"Nexus Studio (🔴 RECORDING - {state.get('targetName', 'System Audio')})"
             elif state.get("isProcessing"):
                 current_state = "processing"
+                icon.title = "Nexus Studio (🟡 Synthesizing AI Lecture Notes...)"
+            else:
+                icon.title = "Nexus AI Lecture Studio (🟢 Ready)"
 
             if current_state != last_state:
                 last_state = current_state
                 icon.icon = make_tray_icon(current_state)
+                icon.menu = get_tray_menu()
         except Exception:
             pass
 
@@ -173,22 +232,11 @@ def main():
 
     # 3. Create Native System Tray Menu
     initial_icon = make_tray_icon("idle")
-    menu = pystray.Menu(
-        pystray.MenuItem("⚡ Open Nexus Studio", lambda icon, item: open_web_studio(), default=True),
-        pystray.MenuItem("🔴 Toggle Recording", lambda icon, item: toggle_recording()),
-        pystray.Menu.SEPARATOR,
-        pystray.MenuItem("📝 Obsidian Notes", lambda icon, item: open_folder(STORAGE_DIR / "markdown")),
-        pystray.MenuItem("🗂️ Anki Decks", lambda icon, item: open_folder(STORAGE_DIR / "exports")),
-        pystray.MenuItem("🎙️ Audio Recordings", lambda icon, item: open_folder(STORAGE_DIR / "recordings")),
-        pystray.Menu.SEPARATOR,
-        pystray.MenuItem("❌ Exit Nexus Studio", lambda icon, item: exit_application())
-    )
-
     tray_icon = pystray.Icon(
         name="NexusStudio",
         icon=initial_icon,
-        title="Nexus AI Lecture Studio (Online)",
-        menu=menu
+        title="Nexus AI Lecture Studio (🟢 Ready)",
+        menu=get_tray_menu()
     )
 
     # 4. Start background icon updater
@@ -204,7 +252,7 @@ def main():
 
     threading.Thread(target=delayed_open, daemon=True).start()
 
-    # 6. Run tray icon on main thread (Ensures 100% Win32 message pump stability)
+    # 6. Run tray icon on main thread
     tray_icon.run()
 
 if __name__ == "__main__":

@@ -315,10 +315,11 @@ export default function Dashboard() {
   // Audio Studio State
   const [showStudio, setShowStudio] = useState(false)
   const [processes, setProcesses] = useState<any[]>([])
-  const [selectedPid, setSelectedPid] = useState<number | null>(null)
-  const [selectedAppName, setSelectedAppName] = useState<string>('')
-  const selectedPidRef = useRef<number | null>(null)
-  const selectedAppNameRef = useRef<string>('')
+  const [selectedPid, setSelectedPid] = useState<number | null>(0)
+  const [selectedAppName, setSelectedAppName] = useState<string>('Entire System Audio (All Apps & Meetings)')
+  const selectedPidRef = useRef<number | null>(0)
+  const selectedAppNameRef = useRef<string>('Entire System Audio (All Apps & Meetings)')
+  const [languageMode, setLanguageMode] = useState<'auto' | 'hinglish' | 'hi' | 'en'>('auto')
 
   // Custom Cursor Preference State
   const [customCursorEnabled, setCustomCursorEnabled] = useState(true)
@@ -366,6 +367,12 @@ export default function Dashboard() {
       document.documentElement.classList.remove('custom-cursor-enabled')
     } else {
       document.documentElement.classList.add('custom-cursor-enabled')
+    }
+
+    // Check saved language preference
+    const savedLang = localStorage.getItem('nexus_language_mode')
+    if (savedLang && ['auto', 'hinglish', 'hi', 'en'].includes(savedLang)) {
+      setLanguageMode(savedLang as any)
     }
 
     fetchSessions()
@@ -504,14 +511,20 @@ export default function Dashboard() {
       const res = await fetch('/api/audio', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'start', pid: targetPid, name: targetName })
+        body: JSON.stringify({ 
+          action: 'start', 
+          pid: targetPid, 
+          name: targetName,
+          language: languageMode
+        })
       })
       const data = await res.json()
       if (data.success) {
         setIsRecording(true)
-        showToast(`Recording ${targetName}`, "success")
+        const langTag = languageMode === 'auto' ? 'Auto-Detect' : languageMode.toUpperCase()
+        showToast(`Recording ${targetName} [${langTag}]`, "success")
       } else {
-        showToast(`Failed: ${data.message || 'Unknown error'}`, "error")
+        showToast(`Failed: ${data.message || data.error || 'Ensure audio is playing'}`, "error")
       }
     } catch (err: any) {
       showToast(`Start failed: ${err.message}`, "error")
@@ -1440,10 +1453,74 @@ export default function Dashboard() {
                     </div>
 
                     <div className="flex items-center gap-3">
+                      {/* Language Mode Selector */}
+                      <div className="flex items-center bg-black/40 border border-white/[0.08] rounded-xl p-1 gap-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setLanguageMode('auto')
+                            localStorage.setItem('nexus_language_mode', 'auto')
+                          }}
+                          className={`px-2.5 py-1 text-[11px] font-medium rounded-lg transition-all ${
+                            languageMode === 'auto'
+                              ? 'bg-white/15 text-white shadow-sm'
+                              : 'text-zinc-400 hover:text-zinc-200'
+                          }`}
+                          title="Auto-detect English, Hindi, or Hinglish"
+                        >
+                          🌐 Auto
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setLanguageMode('hinglish')
+                            localStorage.setItem('nexus_language_mode', 'hinglish')
+                          }}
+                          className={`px-2.5 py-1 text-[11px] font-medium rounded-lg transition-all ${
+                            languageMode === 'hinglish'
+                              ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30 shadow-sm'
+                              : 'text-zinc-400 hover:text-zinc-200'
+                          }`}
+                          title="Hinglish: Hindi spoken words in Roman script mixed with English"
+                        >
+                          🇮🇳 Hinglish
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setLanguageMode('hi')
+                            localStorage.setItem('nexus_language_mode', 'hi')
+                          }}
+                          className={`px-2.5 py-1 text-[11px] font-medium rounded-lg transition-all ${
+                            languageMode === 'hi'
+                              ? 'bg-orange-500/20 text-orange-300 border border-orange-500/30 shadow-sm'
+                              : 'text-zinc-400 hover:text-zinc-200'
+                          }`}
+                          title="Hindi (हिंदी Devanagari script)"
+                        >
+                          🕉️ हिंदी
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setLanguageMode('en')
+                            localStorage.setItem('nexus_language_mode', 'en')
+                          }}
+                          className={`px-2.5 py-1 text-[11px] font-medium rounded-lg transition-all ${
+                            languageMode === 'en'
+                              ? 'bg-white/15 text-white shadow-sm'
+                              : 'text-zinc-400 hover:text-zinc-200'
+                          }`}
+                          title="English Only"
+                        >
+                          🇬🇧 English
+                        </button>
+                      </div>
+
                       {!isRecording ? (
                         <button
                           onClick={handleStartRecording}
-                          disabled={selectedPid === null || selectedPid === undefined}
+                          disabled={isProcessingAI}
                           className="px-5 py-2 bg-white hover:bg-zinc-200 disabled:opacity-30 disabled:cursor-not-allowed text-black rounded-xl text-xs font-semibold shadow-md active:scale-95 transition-all flex items-center gap-2"
                         >
                           <Mic className="w-3.5 h-3.5 text-black" />

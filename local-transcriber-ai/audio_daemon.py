@@ -40,7 +40,8 @@ state = {
     "currentWav": None,
     "lastError": None,
     "lastSavedSession": None,
-    "liveTranscript": ""
+    "liveTranscript": "",
+    "language": "auto"
 }
 
 csharp_process = None
@@ -259,7 +260,8 @@ def live_transcription_worker():
                     sf.setframerate(sample_rate)
                     sf.writeframes(raw_slice)
 
-                res = local_stt.transcribe_audio_file(scratch_wav, model_size="tiny.en")
+                current_lang = state.get("language", "auto")
+                res = local_stt.transcribe_audio_file(scratch_wav, model_size="tiny", prompt_mode=current_lang)
                 text = res.get("text", "").strip()
                 if text:
                     state["liveTranscript"] = text
@@ -272,7 +274,7 @@ def live_transcription_worker():
                 except Exception:
                     pass
 
-def start_capture(pid: int, app_name: str = ""):
+def start_capture(pid: int, app_name: str = "", language: str = "auto"):
     global state, csharp_process, recording_thread
     if state["isRecording"]:
         return False, "Already recording"
@@ -281,6 +283,7 @@ def start_capture(pid: int, app_name: str = ""):
     state["lastError"] = None
     state["targetPid"] = pid
     state["targetName"] = app_name or f"PID {pid}"
+    state["language"] = language or "auto"
     state["liveTranscript"] = ""
 
     storage_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../storage/recordings'))
@@ -304,7 +307,7 @@ def start_capture(pid: int, app_name: str = ""):
         csharp_process = subprocess.Popen(
             cmd,
             cwd=csharp_dir,
-            stdout=subprocess.PIPE,
+            stdout=subprocess.DEVNULL,
             stderr=subprocess.PIPE,
             text=True
         )
@@ -346,9 +349,11 @@ def stop_capture():
             python_exe = sys.executable
             synth_script = os.path.join(os.path.dirname(__file__), "ai_synthesis.py")
             wav_arg = state.get("currentWav") or ""
+            lang_arg = state.get("language") or "auto"
             args = [python_exe, synth_script]
             if wav_arg and os.path.exists(wav_arg):
                 args.append(wav_arg)
+                args.append(lang_arg)
 
             res = subprocess.run(args, capture_output=True, text=True)
             if res.returncode == 0:
@@ -409,6 +414,7 @@ class DaemonHandler(BaseHTTPRequestHandler):
                 "lastError": state["lastError"],
                 "lastSaved": state["lastSavedSession"],
                 "liveTranscript": state.get("liveTranscript", ""),
+                "language": state.get("language", "auto"),
                 "progress": progress_info
             })
         else:
@@ -426,15 +432,20 @@ class DaemonHandler(BaseHTTPRequestHandler):
         if self.path == '/record/start':
             pid = body.get('pid')
             app_name = body.get('name', '')
+            language = body.get('language', 'auto')
             if pid is None:
-                self._send_json({"error": "Missing pid"}, status=400)
-                return
-            ok, msg = start_capture(int(pid), app_name)
+                pid = 0
+            ok, msg = start_capture(int(pid), app_name, language=language)
             self._send_json({"success": ok, "message": msg})
 
         elif self.path == '/record/stop':
             ok, msg = stop_capture()
             self._send_json({"success": ok, "message": msg})
+
+        elif self.path == '/settings/language':
+            lang = body.get('language', 'auto')
+            state['language'] = lang
+            self._send_json({"success": True, "language": lang})
 
         else:
             self._send_json({"error": "Endpoint not found"}, status=404)
@@ -456,9 +467,10 @@ def cleanup_stale_port(port):
 def warmup_whisper():
     try:
         import local_stt
-        print("[DAEMON] Pre-warming Faster-Whisper tiny.en model in background...")
-        local_stt.get_whisper_model()
-        print("[DAEMON] Faster-Whisper model cached and ready.")
+        print("[DAEMON] Pre-warming Faster-Whisper multilingual models in background...")
+        local_stt.get_whisper_model("tiny")
+        local_stt.get_whisper_model("base")
+        print("[DAEMON] Faster-Whisper multilingual models cached and ready.")
     except Exception as e:
         print(f"[DAEMON] Note on Whisper warmup: {e}")
 

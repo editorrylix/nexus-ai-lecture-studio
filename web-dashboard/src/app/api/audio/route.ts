@@ -59,25 +59,43 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { action, pid, name } = body;
+    const { action, pid, name, language } = body;
 
     const endpoint = action === 'start' ? `${DAEMON_URL}/record/start` : `${DAEMON_URL}/record/stop`;
-    const res = await fetch(endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pid, name }),
-      cache: 'no-store'
-    });
+    try {
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pid, name, language }),
+        cache: 'no-store'
+      });
 
-    if (!res.ok) {
-      return NextResponse.json({ error: `Daemon responded with ${res.status}` }, { status: 502 });
+      if (res.ok) {
+        const data = await res.json();
+        return NextResponse.json(data);
+      }
+    } catch {
+      // Self-heal: daemon might be starting up
+      autoStartDaemon();
+      await new Promise(r => setTimeout(r, 800));
+      const retryRes = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pid, name, language }),
+        cache: 'no-store'
+      });
+      if (retryRes.ok) {
+        const retryData = await retryRes.json();
+        return NextResponse.json(retryData);
+      }
     }
 
-    const data = await res.json();
-    return NextResponse.json(data);
+    return NextResponse.json({ 
+      error: "Audio Daemon is initializing. Please click Start Recording again in 2 seconds." 
+    }, { status: 503 });
   } catch (error: any) {
     return NextResponse.json({ 
-      error: "Could not reach local Audio Daemon on port 5005." 
-    }, { status: 503 });
+      error: error.message || "Could not reach local Audio Daemon." 
+    }, { status: 500 });
   }
 }

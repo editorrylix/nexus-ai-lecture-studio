@@ -65,11 +65,11 @@ def get_latest_audio() -> str:
         return None
     return max(list_of_files, key=os.path.getctime)
 
-def process_audio_locally(audio_path: str) -> MeetingSynthesis:
+def process_audio_locally(audio_path: str, language: str = "auto") -> MeetingSynthesis:
     """Fallback offline processing using faster-whisper with CTranslate2."""
     import local_stt
-    print(f"[OFFLINE] Transcribing {audio_path} with local Faster-Whisper model...")
-    stt_res = local_stt.transcribe_audio_file(audio_path, model_size="tiny.en")
+    print(f"[OFFLINE] Transcribing {audio_path} with local Faster-Whisper base model (mode: {language})...")
+    stt_res = local_stt.transcribe_audio_file(audio_path, model_size="base", prompt_mode=language)
     transcript = stt_res.get("text", "").strip()
     if not transcript:
         transcript = "No audible speech was detected in this recording."
@@ -124,15 +124,15 @@ def process_audio_locally(audio_path: str) -> MeetingSynthesis:
         course_outline=course_outline
     )
 
-def process_audio(audio_path: str) -> MeetingSynthesis:
+def process_audio(audio_path: str, language: str = "auto") -> MeetingSynthesis:
     if not os.path.exists(audio_path) or os.path.getsize(audio_path) < 2048:
         raise ValueError(f"Recording file '{audio_path}' is virtually empty ({os.path.getsize(audio_path) if os.path.exists(audio_path) else 0} bytes). Make sure the selected application was playing audible sound during the recording.")
 
     # 1. Always Transcribe 100% Locally (Zero Audio Uploaded to Cloud)
-    update_progress("transcribing", 20, "Transcribing lecture audio locally on CPU via Faster-Whisper...")
+    update_progress("transcribing", 20, f"Transcribing lecture audio locally on CPU via Faster-Whisper (mode: {language})...")
     import local_stt
-    print(f"[LOCAL STT] Transcribing {audio_path} locally on CPU via Faster-Whisper...")
-    stt_res = local_stt.transcribe_audio_file(audio_path, model_size="tiny.en")
+    print(f"[LOCAL STT] Transcribing {audio_path} locally on CPU via Faster-Whisper (mode: {language})...")
+    stt_res = local_stt.transcribe_audio_file(audio_path, model_size="base", prompt_mode=language)
     transcript = stt_res.get("text", "").strip()
     
     if not transcript:
@@ -140,19 +140,20 @@ def process_audio(audio_path: str) -> MeetingSynthesis:
         transcript = "No audible speech was detected in this recording."
 
     word_count = len(transcript.split())
-    print(f"[LOCAL STT] Local transcript generated ({word_count} words). Zero audio sent to cloud.")
+    detected_lang = stt_res.get("language", language)
+    print(f"[LOCAL STT] Local transcript generated ({word_count} words, lang: {detected_lang}). Zero audio sent to cloud.")
 
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
         print("[AI] GEMINI_API_KEY not set. Using 100% offline local notes synthesis.")
         update_progress("synthesizing", 60, "Synthesizing offline lecture notes & flashcards...")
-        return process_audio_locally(audio_path)
+        return process_audio_locally(audio_path, language=language)
     
     # 2. Use Gemini API ONLY for Text Intelligence (Summary, Outline, Flashcards, Glossary)
-    update_progress("synthesizing", 55, f"Transcription complete ({word_count} words). Generating AI lecture synthesis with Gemini 3.6 Flash...")
+    update_progress("synthesizing", 55, f"Transcription complete ({word_count} words). Generating AI lecture synthesis with Gemini Flash...")
     try:
         client = genai.Client(api_key=api_key)
-        print("Sending clean transcript to Gemini 3.6 Flash for education synthesis & study tools...")
+        print("Sending clean transcript to Gemini Flash for education synthesis & study tools...")
         prompt = f"""
         You are an expert AI tutor and lecture study synthesizer.
         Below is the verbatim transcript of a recorded meeting/lecture:
@@ -161,12 +162,13 @@ def process_audio(audio_path: str) -> MeetingSynthesis:
         {transcript}
         ---
 
-        Generate a comprehensive, structured study package based on this lecture:
-        1. raw_transcript: Use the exact transcript provided above.
-        2. summary: A structured, high-level executive summary in Markdown format with key sections.
-        3. action_items: Practical takeaways, study recommendations, or exam preparation points.
+        Language Context: The lecture transcript may be in English, Hindi (Devanagari script), or Hinglish (code-switched Hindi written in Roman/English alphabet). 
+        Preserve core technical terminology in English while generating crystal-clear study materials tailored for college/university students:
+        1. raw_transcript: Use the exact verbatim transcript provided above.
+        2. summary: A structured, high-yield summary in Markdown format with key formulas, core concepts, and headings.
+        3. action_items: Practical takeaways, exam revision points, or follow-up exercises.
         4. course_outline: Logical course sections with clear topic titles and sub-bullet points.
-        5. glossary: Essential technical terms or domain concepts with concise definitions.
+        5. glossary: Essential technical terms or domain concepts with clear, student-friendly definitions.
         6. flashcards: High-yield Question and Answer flashcard pairs for spaced repetition study.
         """
         
@@ -289,11 +291,19 @@ def save_session_local(synthesis: MeetingSynthesis, audio_path: str = None) -> d
     return session_obj
 
 if __name__ == "__main__":
+    if sys.platform == 'win32':
+        try:
+            sys.stdout.reconfigure(encoding='utf-8')
+        except Exception:
+            pass
+
     audio_file = sys.argv[1] if len(sys.argv) > 1 and os.path.exists(sys.argv[1]) else get_latest_audio()
+    lang_arg = sys.argv[2] if len(sys.argv) > 2 else "auto"
+
     if audio_file:
         try:
-            print(f"Processing audio: {audio_file}")
-            synthesis = process_audio(audio_file)
+            print(f"Processing audio: {audio_file} (language mode: {lang_arg})")
+            synthesis = process_audio(audio_file, language=lang_arg)
             print("\n--- Summary ---")
             print(synthesis.summary)
             session = save_session_local(synthesis, audio_file)
