@@ -21,7 +21,7 @@
 
 <br/>
 
-[Quick Start](#-quick-start-3-minutes) • [Why Nexus?](#-why-nexus-vs-alternatives) • [Architecture](#-hybrid-architecture) • [Cloud vs Local LLM](#-cloud-api-vs-local-llm-deep-architectural-analysis) • [System Requirements & Disk Space](#-system-requirements--disk-space-footprint) • [Key Features](#-core-capabilities) • [Tech Stack](#-tech-stack)
+[Quick Start](#-quick-start-3-minutes) • [Why Nexus?](#-why-nexus-vs-alternatives) • [Architecture](#-hybrid-architecture) • [Cloud vs Local LLM](#-cloud-api-vs-local-llm-deep-architectural-analysis) • [System Requirements & Disk Space](#-system-requirements--disk-space-footprint) • [Key Features](#-core-capabilities) • [FAQ](#-frequently-asked-questions-faq)
 
 ---
 
@@ -238,6 +238,18 @@ Run the launcher from the project root:
 | `←` / `→` | Previous / Next Flashcard |
 | `?` | Show Keyboard Shortcuts HUD |
 | `Esc` | Close Modals & Palettes |
+
+---
+
+## ❓ Frequently Asked Questions (FAQ)
+
+### Q: Why does Windows Defender Firewall show a prompt for `filter.pyd` or `python.exe`?
+**A:** When Nexus starts, it initializes `faster-whisper` and its underlying audio decoding engine, **PyAV** (`av`). 
+
+- **What is `filter.pyd`?** It is a compiled C-extension library located at `venv\Lib\site-packages\av\filter\filter.pyd`. It links **FFmpeg** (`libavfilter`) to decode incoming digital audio waveforms locally on your machine.
+- **Why does it say "Publisher: Unknown"?** Like NumPy, PyTorch, and 99% of open-source Python packages installed via `pip`, PyAV is distributed as an open-source binary wheel without a commercial Microsoft Extended Validation (EV) code-signing certificate (which costs hundreds of dollars annually).
+- **Why does the firewall appear?** FFmpeg includes built-in network protocol headers (HTTP, RTSP) and initializes Windows Sockets (`WSAStartup`). At the same time, the Nexus Python daemon binds to local port `5005` (`127.0.0.1:5005`) for internal communication with the web dashboard. Windows Defender Firewall detects socket activity from an unsigned extension and asks whether to permit local network communication.
+- **What should I do?** Check **"Private networks"** and click **"Allow access"**. Windows will remember your choice and will never ask again. Even if you dismiss or cancel the prompt, local loopback (`127.0.0.1`) audio decoding continues to work properly.
 
 ---
 
